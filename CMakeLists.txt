@@ -5,7 +5,7 @@ set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -std=c89 -pedantic")
 include_directories(${PROJECT_SOURCE_DIR}/src)
 
 add_library(guscc_obj OBJECT
-    src/ident.c
+    src/str.c
     src/token.c
     src/lex.c
     )

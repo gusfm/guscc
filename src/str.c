@@ -1,25 +1,25 @@
-#include "ident.h"
+#include "str.h"
 #include <stdlib.h>
 
-#define IDENT_INIT_SIZE 8
+#define STRING_INIT_SIZE 8
 
-ident_t *ident_create(void)
+str_t *str_create(void)
 {
-    ident_t *i = malloc(sizeof(ident_t));
-    i->buf_size = IDENT_INIT_SIZE;
+    str_t *i = malloc(sizeof(str_t));
+    i->buf_size = STRING_INIT_SIZE;
     i->str_len = 0;
-    i->str = malloc(IDENT_INIT_SIZE);
+    i->str = malloc(STRING_INIT_SIZE);
     return i;
 }
 
-char *ident_destroy(ident_t *i)
+char *str_destroy(str_t *i)
 {
     char *s = i->str;
     free(i);
     return s;
 }
 
-void ident_append(ident_t *i, char c)
+void str_append(str_t *i, char c)
 {
     if (i->str_len + 1 == i->buf_size) {
         i->buf_size *= 2;

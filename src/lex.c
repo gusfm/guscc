@@ -2,7 +2,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-#include "ident.h"
+#include "str.h"
 #include "token.h"
 
 char lex_readc(lex_t *l)
@@ -48,25 +48,42 @@ static token_type_t get_token_type(char *s)
 
 token_t *read_ident(lex_t *l, char c)
 {
-    ident_t *ident = ident_create();
-    ident_append(ident, c);
+    str_t *str = str_create();
+    str_append(str, c);
     for (;;) {
         token_type_t tok_type;
         char *tok_str;
         c = lex_readc(l);
         if (isalnum(c) || c == '_') {
-            ident_append(ident, c);
+            str_append(str, c);
             continue;
         }
         lex_ungetc(l, c);
-        ident_append(ident, '\0');
-        tok_str = ident_destroy(ident);
+        str_append(str, '\0');
+        tok_str = str_destroy(str);
         tok_type = get_token_type(tok_str);
         if (tok_type != TOKEN_IDENT) {
             free(tok_str);
             tok_str = NULL;
         }
         return token_create(tok_type, l->tok_line, l->tok_col, tok_str);
+    }
+}
+
+token_t *read_number(lex_t *l, char c)
+{
+    str_t *str = str_create();
+    str_append(str, c);
+    for (;;) {
+        c = lex_readc(l);
+        if (isdigit(c)) {
+            str_append(str, c);
+            continue;
+        }
+        lex_ungetc(l, c);
+        str_append(str, '\0');
+        return token_create(TOKEN_NUMBER, l->tok_line, l->tok_col,
+                            str_destroy(str));
     }
 }
 
@@ -82,6 +99,17 @@ static token_t *lex_next_token(lex_t *l)
             return token_create(TOKEN_OPEN_PAR, l->tok_line, l->tok_col, NULL);
         case ')':
             return token_create(TOKEN_CLOSE_PAR, l->tok_line, l->tok_col, NULL);
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+            return read_number(l, c);
         case ';':
             return token_create(TOKEN_SEMI_COLON, l->tok_line, l->tok_col,
                                 NULL);
@@ -123,8 +151,8 @@ void lex_execute(lex_t *l)
     while ((t = lex_next_token(l)) != NULL) {
         printf("type=%s, line=%d, col=%d", token_type_str(t->type), t->line,
                t->col);
-        if (t->type == TOKEN_IDENT) {
-            printf(", ident=\"%s\"", t->sval);
+        if (t->type == TOKEN_IDENT || t->type == TOKEN_NUMBER) {
+            printf(", str=\"%s\"", t->sval);
         }
         printf("\n");
         token_destroy(t);

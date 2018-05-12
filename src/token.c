@@ -33,6 +33,8 @@ const char *token_type_str(token_type_t type)
             return "{";
         case TOKEN_CLOSE_BRACE:
             return "}";
+        case TOKEN_NUMBER:
+            return "number";
         case TOKEN_KW_INT:
             return "int";
         case TOKEN_KW_RETURN:
