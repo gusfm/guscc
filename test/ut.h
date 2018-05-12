@@ -26,13 +26,14 @@ extern struct ut unit_test;
         ASSERT(test);                    \
     } while (0)
 
-#define ut_run(test)                                                    \
-    do {                                                                \
-        unit_test.run++;                                                \
-        int result = test();                                            \
-        if (result != 0)                                                \
-            unit_test.failed++;                                         \
-        printf("%s.%s: %s\n", __func__, #test, result ? "FAIL" : "OK"); \
+#define ut_run(test)                                       \
+    do {                                                   \
+        int result;                                        \
+        unit_test.run++;                                   \
+        result = test();                                   \
+        if (result != 0)                                   \
+            unit_test.failed++;                            \
+        printf("%s: %s\n", #test, result ? "FAIL" : "OK"); \
     } while (0)
 
 #define ut_result()                                      \

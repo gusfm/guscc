@@ -1,5 +1,5 @@
-#include "ut.h"
 #include "lex.h"
+#include "ut.h"
 
 static int basic(void)
 {
