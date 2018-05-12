@@ -37,12 +37,70 @@ static void lex_skip_space(lex_t *l)
 
 static token_type_t get_token_type(char *s)
 {
+    if (strcmp(s, "auto") == 0)
+        return TOKEN_KW_AUTO;
+    if (strcmp(s, "break") == 0)
+        return TOKEN_KW_BREAK;
+    if (strcmp(s, "case") == 0)
+        return TOKEN_KW_CASE;
+    if (strcmp(s, "char") == 0)
+        return TOKEN_KW_CHAR;
+    if (strcmp(s, "const") == 0)
+        return TOKEN_KW_CONST;
+    if (strcmp(s, "continue") == 0)
+        return TOKEN_KW_CONTINUE;
+    if (strcmp(s, "default") == 0)
+        return TOKEN_KW_DEFAULT;
+    if (strcmp(s, "do") == 0)
+        return TOKEN_KW_DO;
+    if (strcmp(s, "double") == 0)
+        return TOKEN_KW_DOUBLE;
+    if (strcmp(s, "else") == 0)
+        return TOKEN_KW_ELSE;
+    if (strcmp(s, "enum") == 0)
+        return TOKEN_KW_ENUM;
+    if (strcmp(s, "extern") == 0)
+        return TOKEN_KW_EXTERN;
+    if (strcmp(s, "float") == 0)
+        return TOKEN_KW_FLOAT;
+    if (strcmp(s, "for") == 0)
+        return TOKEN_KW_FOR;
+    if (strcmp(s, "goto") == 0)
+        return TOKEN_KW_GOTO;
+    if (strcmp(s, "if") == 0)
+        return TOKEN_KW_IF;
     if (strcmp(s, "int") == 0)
         return TOKEN_KW_INT;
+    if (strcmp(s, "long") == 0)
+        return TOKEN_KW_LONG;
+    if (strcmp(s, "register") == 0)
+        return TOKEN_KW_REGISTER;
     if (strcmp(s, "return") == 0)
         return TOKEN_KW_RETURN;
+    if (strcmp(s, "short") == 0)
+        return TOKEN_KW_SHORT;
+    if (strcmp(s, "signed") == 0)
+        return TOKEN_KW_SIGNED;
+    if (strcmp(s, "sizeof") == 0)
+        return TOKEN_KW_SIZEOF;
+    if (strcmp(s, "static") == 0)
+        return TOKEN_KW_STATIC;
+    if (strcmp(s, "struct") == 0)
+        return TOKEN_KW_STRUCT;
+    if (strcmp(s, "switch") == 0)
+        return TOKEN_KW_SWITCH;
+    if (strcmp(s, "typedef") == 0)
+        return TOKEN_KW_TYPEDEF;
+    if (strcmp(s, "union") == 0)
+        return TOKEN_KW_UNION;
+    if (strcmp(s, "unsigned") == 0)
+        return TOKEN_KW_UNSIGNED;
     if (strcmp(s, "void") == 0)
         return TOKEN_KW_VOID;
+    if (strcmp(s, "volatile") == 0)
+        return TOKEN_KW_VOLATILE;
+    if (strcmp(s, "while") == 0)
+        return TOKEN_KW_WHILE;
     return TOKEN_IDENT;
 }
 
@@ -111,8 +169,7 @@ token_t *lex_next_token(lex_t *l)
         case '9':
             return read_number(l, c);
         case ';':
-            return token_create(TOKEN_SEMICOLON, l->tok_line, l->tok_col,
-                                NULL);
+            return token_create(TOKEN_SEMICOLON, l->tok_line, l->tok_col, NULL);
         case '{':
             return token_create(TOKEN_OPEN_BRACE, l->tok_line, l->tok_col,
                                 NULL);
@@ -120,7 +177,7 @@ token_t *lex_next_token(lex_t *l)
             return token_create(TOKEN_CLOSE_BRACE, l->tok_line, l->tok_col,
                                 NULL);
         case EOF:
-            return token_create(TOKEN_EOF, -1, -1, NULL);
+            return NULL;
         default:
             return read_ident(l, c);
     }
@@ -138,8 +195,7 @@ void lex_execute(lex_t *l)
 {
     token_t *t;
     printf("tokens:\n");
-    do {
-        t = lex_next_token(l);
+    while ((t = lex_next_token(l)) != NULL) {
         printf("type=%s, line=%d, col=%d", token_type_str(t->type), t->line,
                t->col);
         if (t->type == TOKEN_IDENT || t->type == TOKEN_NUMBER) {
@@ -147,5 +203,5 @@ void lex_execute(lex_t *l)
         }
         printf("\n");
         token_destroy(t);
-    } while (t->type != TOKEN_EOF);
+    }
 }

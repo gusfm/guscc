@@ -3,7 +3,7 @@
 #include "lex.h"
 #include "ut.h"
 
-#if defined (__STRICT_ANSI__)
+#if defined(__STRICT_ANSI__)
 
 static FILE *fmemopen(void *buf, size_t size, const char *mode)
 {
@@ -50,6 +50,7 @@ static int lex_test_basic(void)
     ASSERT(check_next_token(&lex, TOKEN_NUMBER, "42") == 0);
     ASSERT(check_next_token(&lex, TOKEN_SEMICOLON, NULL) == 0);
     ASSERT(check_next_token(&lex, TOKEN_CLOSE_BRACE, NULL) == 0);
+    ASSERT(lex_next_token(&lex) == NULL);
     fclose(stream);
     return 0;
 }

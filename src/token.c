@@ -35,14 +35,70 @@ const char *token_type_str(token_type_t type)
             return "}";
         case TOKEN_NUMBER:
             return "number";
+        case TOKEN_KW_AUTO:
+            return "auto";
+        case TOKEN_KW_BREAK:
+            return "break";
+        case TOKEN_KW_CASE:
+            return "case";
+        case TOKEN_KW_CHAR:
+            return "char";
+        case TOKEN_KW_CONST:
+            return "const";
+        case TOKEN_KW_CONTINUE:
+            return "continue";
+        case TOKEN_KW_DEFAULT:
+            return "default";
+        case TOKEN_KW_DO:
+            return "do";
+        case TOKEN_KW_DOUBLE:
+            return "double";
+        case TOKEN_KW_ELSE:
+            return "else";
+        case TOKEN_KW_ENUM:
+            return "enum";
+        case TOKEN_KW_EXTERN:
+            return "extern";
+        case TOKEN_KW_FLOAT:
+            return "float";
+        case TOKEN_KW_FOR:
+            return "for";
+        case TOKEN_KW_GOTO:
+            return "goto";
+        case TOKEN_KW_IF:
+            return "if";
         case TOKEN_KW_INT:
             return "int";
+        case TOKEN_KW_LONG:
+            return "long";
+        case TOKEN_KW_REGISTER:
+            return "register";
         case TOKEN_KW_RETURN:
             return "return";
+        case TOKEN_KW_SHORT:
+            return "short";
+        case TOKEN_KW_SIGNED:
+            return "signed";
+        case TOKEN_KW_SIZEOF:
+            return "sizeof";
+        case TOKEN_KW_STATIC:
+            return "static";
+        case TOKEN_KW_STRUCT:
+            return "struct";
+        case TOKEN_KW_SWITCH:
+            return "switch";
+        case TOKEN_KW_TYPEDEF:
+            return "typedef";
+        case TOKEN_KW_UNION:
+            return "union";
+        case TOKEN_KW_UNSIGNED:
+            return "unsigned";
         case TOKEN_KW_VOID:
             return "void";
-        case TOKEN_EOF:
-            return "EOF";
+        case TOKEN_KW_VOLATILE:
+            return "volatile";
+        case TOKEN_KW_WHILE:
+            return "while";
         default:
             return NULL;
     }
