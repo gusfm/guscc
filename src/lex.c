@@ -87,7 +87,7 @@ token_t *read_number(lex_t *l, char c)
     }
 }
 
-static token_t *lex_next_token(lex_t *l)
+token_t *lex_next_token(lex_t *l)
 {
     int c;
     lex_skip_space(l);
@@ -111,7 +111,7 @@ static token_t *lex_next_token(lex_t *l)
         case '9':
             return read_number(l, c);
         case ';':
-            return token_create(TOKEN_SEMI_COLON, l->tok_line, l->tok_col,
+            return token_create(TOKEN_SEMICOLON, l->tok_line, l->tok_col,
                                 NULL);
         case '{':
             return token_create(TOKEN_OPEN_BRACE, l->tok_line, l->tok_col,
@@ -120,35 +120,26 @@ static token_t *lex_next_token(lex_t *l)
             return token_create(TOKEN_CLOSE_BRACE, l->tok_line, l->tok_col,
                                 NULL);
         case EOF:
-            return NULL;
+            return token_create(TOKEN_EOF, -1, -1, NULL);
         default:
             return read_ident(l, c);
     }
 }
 
-int lex_init(lex_t *l, const char *filename)
+int lex_init(lex_t *l, FILE *input)
 {
-    l->input = fopen(filename, "r");
-    if (l->input == NULL) {
-        fprintf(stderr, "error: could not open %s\n", filename);
-        return -1;
-    }
-    l->filename = filename;
+    l->input = input;
     l->line = 1;
     l->col = 1;
     return 0;
-}
-
-void lex_finish(lex_t *l)
-{
-    fclose(l->input);
 }
 
 void lex_execute(lex_t *l)
 {
     token_t *t;
     printf("tokens:\n");
-    while ((t = lex_next_token(l)) != NULL) {
+    do {
+        t = lex_next_token(l);
         printf("type=%s, line=%d, col=%d", token_type_str(t->type), t->line,
                t->col);
         if (t->type == TOKEN_IDENT || t->type == TOKEN_NUMBER) {
@@ -156,5 +147,5 @@ void lex_execute(lex_t *l)
         }
         printf("\n");
         token_destroy(t);
-    }
+    } while (t->type != TOKEN_EOF);
 }

@@ -5,13 +5,14 @@ typedef enum {
     TOKEN_IDENT,
     TOKEN_OPEN_PAR,
     TOKEN_CLOSE_PAR,
-    TOKEN_SEMI_COLON,
+    TOKEN_SEMICOLON,
     TOKEN_OPEN_BRACE,
     TOKEN_CLOSE_BRACE,
     TOKEN_NUMBER,
     TOKEN_KW_INT,
     TOKEN_KW_RETURN,
-    TOKEN_KW_VOID
+    TOKEN_KW_VOID,
+    TOKEN_EOF
 } token_type_t;
 
 typedef struct {

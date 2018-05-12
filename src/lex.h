@@ -2,9 +2,9 @@
 #define LEX_H
 
 #include <stdio.h>
+#include "token.h"
 
 typedef struct {
-    const char *filename;
     FILE *input;
     int line;
     int col;
@@ -12,8 +12,8 @@ typedef struct {
     int tok_col;
 } lex_t;
 
-int lex_init(lex_t *l, const char *filename);
-void lex_finish(lex_t *l);
+int lex_init(lex_t *l, FILE *input);
+token_t *lex_next_token(lex_t *l);
 void lex_execute(lex_t *l);
 
 #endif /* LEX_H */

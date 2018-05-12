@@ -27,7 +27,7 @@ const char *token_type_str(token_type_t type)
             return "(";
         case TOKEN_CLOSE_PAR:
             return ")";
-        case TOKEN_SEMI_COLON:
+        case TOKEN_SEMICOLON:
             return ";";
         case TOKEN_OPEN_BRACE:
             return "{";
@@ -41,6 +41,8 @@ const char *token_type_str(token_type_t type)
             return "return";
         case TOKEN_KW_VOID:
             return "void";
+        case TOKEN_EOF:
+            return "EOF";
         default:
             return NULL;
     }

@@ -2,11 +2,11 @@
 
 struct ut unit_test;
 
-extern void test_lex(void);
+extern void lex_test(void);
 
 int main(void)
 {
-    test_lex();
+    lex_test();
     ut_result();
     return 0;
 }
