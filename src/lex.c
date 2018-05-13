@@ -1,11 +1,25 @@
 #include "lex.h"
 #include <ctype.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "str.h"
 #include "token.h"
 
-char lex_readc(lex_t *l)
+int line;
+int col;
+
+static void warn(const char *format, ...)
+{
+    va_list args;
+    fprintf(stderr, "%d:%d: warning: ", line, col);
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+}
+
+static char lex_readc(lex_t *l)
 {
     int c = fgetc(l->input);
     if (c == '\n') {
@@ -17,7 +31,7 @@ char lex_readc(lex_t *l)
     return c;
 }
 
-int lex_ungetc(lex_t *l, int c)
+static int lex_ungetc(lex_t *l, int c)
 {
     l->col--;
     return ungetc(c, l->input);
@@ -104,7 +118,7 @@ static token_type_t get_token_type(char *s)
     return TOKEN_IDENT;
 }
 
-token_t *read_ident(lex_t *l, char c)
+static token_t *read_ident(lex_t *l, char c)
 {
     str_t *str = str_create();
     str_append(str, c);
@@ -124,11 +138,11 @@ token_t *read_ident(lex_t *l, char c)
             free(tok_str);
             tok_str = NULL;
         }
-        return token_create(tok_type, l->tok_line, l->tok_col, tok_str);
+        return token_create_string(tok_type, tok_str);
     }
 }
 
-token_t *read_number(lex_t *l, char c)
+static token_t *read_number(lex_t *l, char c)
 {
     str_t *str = str_create();
     str_append(str, c);
@@ -140,8 +154,214 @@ token_t *read_number(lex_t *l, char c)
         }
         lex_ungetc(l, c);
         str_append(str, '\0');
-        return token_create(TOKEN_NUMBER, l->tok_line, l->tok_col,
-                            str_destroy(str));
+        return token_create_string(TOKEN_NUMBER, str_destroy(str));
+    }
+}
+
+static token_t *read_less_than(lex_t *l, char c)
+{
+    c = lex_readc(l);
+    if (c == '<') {
+        c = lex_readc(l);
+        if (c == '=') {
+            return token_create(TOKEN_LSH_ASSIGN);
+        } else {
+            lex_ungetc(l, c);
+            return token_create(TOKEN_LSH_OP);
+        }
+    } else if (c == '=') {
+        return token_create(TOKEN_LE_OP);
+    } else {
+        lex_ungetc(l, c);
+        return token_create('<');
+    }
+}
+
+static token_t *read_greater_than(lex_t *l, char c)
+{
+    c = lex_readc(l);
+    if (c == '>') {
+        c = lex_readc(l);
+        if (c == '=') {
+            return token_create(TOKEN_RSH_ASSIGN);
+        } else {
+            lex_ungetc(l, c);
+            return token_create(TOKEN_RSH_OP);
+        }
+    } else if (c == '=') {
+        return token_create(TOKEN_GE_OP);
+    } else {
+        lex_ungetc(l, c);
+        return token_create('>');
+    }
+}
+
+static token_t *read_add(lex_t *l, char c)
+{
+    c = lex_readc(l);
+    if (c == '+') {
+        return token_create(TOKEN_INC_OP);
+    } else if (c == '=') {
+        return token_create(TOKEN_ADD_ASSIGN);
+    } else {
+        lex_ungetc(l, c);
+        return token_create('+');
+    }
+}
+
+static token_t *read_sub(lex_t *l, char c)
+{
+    c = lex_readc(l);
+    if (c == '-') {
+        return token_create(TOKEN_DEC_OP);
+    } else if (c == '=') {
+        return token_create(TOKEN_SUB_ASSIGN);
+    } else if (c == '>') {
+        return token_create(TOKEN_PTR_OP);
+    } else {
+        lex_ungetc(l, c);
+        return token_create('-');
+    }
+}
+
+static token_t *read_asterisk(lex_t *l, char c)
+{
+    c = lex_readc(l);
+    if (c == '=') {
+        return token_create(TOKEN_MUL_ASSIGN);
+    } else {
+        lex_ungetc(l, c);
+        return token_create('*');
+    }
+}
+
+static token_t *read_div(lex_t *l, char c)
+{
+    c = lex_readc(l);
+    if (c == '=') {
+        return token_create(TOKEN_DIV_ASSIGN);
+    } else {
+        lex_ungetc(l, c);
+        return token_create('/');
+    }
+}
+
+static token_t *read_mod(lex_t *l, char c)
+{
+    c = lex_readc(l);
+    if (c == '=') {
+        return token_create(TOKEN_MOD_ASSIGN);
+    } else {
+        lex_ungetc(l, c);
+        return token_create('%');
+    }
+}
+
+static token_t *read_and(lex_t *l, char c)
+{
+    c = lex_readc(l);
+    if (c == '&') {
+        return token_create(TOKEN_AND_OP);
+    } else if (c == '=') {
+        return token_create(TOKEN_AND_ASSIGN);
+    } else {
+        lex_ungetc(l, c);
+        return token_create('&');
+    }
+}
+
+static token_t *read_or(lex_t *l, char c)
+{
+    c = lex_readc(l);
+    if (c == '|') {
+        return token_create(TOKEN_OR_OP);
+    } else if (c == '=') {
+        return token_create(TOKEN_OR_ASSIGN);
+    } else {
+        lex_ungetc(l, c);
+        return token_create('|');
+    }
+}
+
+static token_t *read_xor(lex_t *l, char c)
+{
+    c = lex_readc(l);
+    if (c == '=') {
+        return token_create(TOKEN_XOR_ASSIGN);
+    } else {
+        lex_ungetc(l, c);
+        return token_create('^');
+    }
+}
+
+static token_t *read_eq(lex_t *l, char c)
+{
+    c = lex_readc(l);
+    if (c == '=') {
+        return token_create(TOKEN_EQ_OP);
+    } else {
+        lex_ungetc(l, c);
+        return token_create('=');
+    }
+}
+
+static token_t *read_not(lex_t *l, char c)
+{
+    c = lex_readc(l);
+    if (c == '=') {
+        return token_create(TOKEN_NE_OP);
+    } else {
+        lex_ungetc(l, c);
+        return token_create('!');
+    }
+}
+
+static char read_escaped_char(lex_t *l)
+{
+    char c = lex_readc(l);
+    switch (c) {
+        case 'f':
+            return '\f';
+        case 'n':
+            return '\n';
+        case 'r':
+            return '\r';
+        case 't':
+            return '\t';
+        case 'v':
+            return '\v';
+        default:
+        case '\'':
+        case '\\':
+        case '"':
+            return c;
+    }
+    line = l->line;
+    col = l->col;
+    warn("unknown escape character: \\%c", c);
+    return c;
+}
+
+static token_t *read_char(lex_t *l, char c)
+{
+    c = lex_readc(l);
+    if (c == '\\')
+        c = read_escaped_char(l);
+    lex_readc(l);
+    return token_create_char(c);
+}
+
+static token_t *read_string(lex_t *l, char c)
+{
+    str_t *str = str_create();
+    for (;;) {
+        c = lex_readc(l);
+        if (c != '"') {
+            str_append(str, c);
+            continue;
+        }
+        str_append(str, '\0');
+        return token_create_string(TOKEN_STRING_LITERAL, str_destroy(str));
     }
 }
 
@@ -149,14 +369,47 @@ token_t *lex_next_token(lex_t *l)
 {
     int c;
     lex_skip_space(l);
-    l->tok_line = l->line;
-    l->tok_col = l->col;
+    line = l->line;
+    col = l->col;
     c = lex_readc(l);
     switch (c) {
+        case '"':
+            return read_string(l, c);
+        case '\'':
+            return read_char(l, c);
         case '(':
-            return token_create(TOKEN_OPEN_PAR, l->tok_line, l->tok_col, NULL);
         case ')':
-            return token_create(TOKEN_CLOSE_PAR, l->tok_line, l->tok_col, NULL);
+        case ',':
+        case ':':
+        case ';':
+        case '[':
+        case ']':
+        case '{':
+        case '}':
+        case '?':
+        case '~':
+        case '.':
+            return token_create(c);
+        case '+':
+            return read_add(l, c);
+        case '-':
+            return read_sub(l, c);
+        case '*':
+            return read_asterisk(l, c);
+        case '/':
+            return read_div(l, c);
+        case '%':
+            return read_mod(l, c);
+        case '&':
+            return read_and(l, c);
+        case '|':
+            return read_or(l, c);
+        case '^':
+            return read_xor(l, c);
+        case '=':
+            return read_eq(l, c);
+        case '!':
+            return read_not(l, c);
         case '0':
         case '1':
         case '2':
@@ -168,14 +421,10 @@ token_t *lex_next_token(lex_t *l)
         case '8':
         case '9':
             return read_number(l, c);
-        case ';':
-            return token_create(TOKEN_SEMICOLON, l->tok_line, l->tok_col, NULL);
-        case '{':
-            return token_create(TOKEN_OPEN_BRACE, l->tok_line, l->tok_col,
-                                NULL);
-        case '}':
-            return token_create(TOKEN_CLOSE_BRACE, l->tok_line, l->tok_col,
-                                NULL);
+        case '<':
+            return read_less_than(l, c);
+        case '>':
+            return read_greater_than(l, c);
         case EOF:
             return NULL;
         default:
@@ -189,19 +438,4 @@ int lex_init(lex_t *l, FILE *input)
     l->line = 1;
     l->col = 1;
     return 0;
-}
-
-void lex_execute(lex_t *l)
-{
-    token_t *t;
-    printf("tokens:\n");
-    while ((t = lex_next_token(l)) != NULL) {
-        printf("type=%s, line=%d, col=%d", token_type_str(t->type), t->line,
-               t->col);
-        if (t->type == TOKEN_IDENT || t->type == TOKEN_NUMBER) {
-            printf(", str=\"%s\"", t->sval);
-        }
-        printf("\n");
-        token_destroy(t);
-    }
 }

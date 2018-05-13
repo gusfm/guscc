@@ -12,7 +12,6 @@ int main(void)
     if (lex_init(&lex, f) != 0) {
         return -1;
     }
-    lex_execute(&lex);
     fclose(f);
     return 0;
 }
