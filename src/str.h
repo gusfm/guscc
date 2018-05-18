@@ -8,7 +8,7 @@ typedef struct {
 } str_t;
 
 str_t *str_create(void);
-char *str_destroy(str_t *i);
-void str_append(str_t *i, char c);
+char *str_destroy(str_t *s);
+void str_append(str_t *s, char c);
 
 #endif /* STR_H */

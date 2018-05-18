@@ -5,25 +5,25 @@
 
 str_t *str_create(void)
 {
-    str_t *i = malloc(sizeof(str_t));
-    i->buf_size = STRING_INIT_SIZE;
-    i->str_len = 0;
-    i->str = malloc(STRING_INIT_SIZE);
-    return i;
-}
-
-char *str_destroy(str_t *i)
-{
-    char *s = i->str;
-    free(i);
+    str_t *s = malloc(sizeof(str_t));
+    s->buf_size = STRING_INIT_SIZE;
+    s->str_len = 0;
+    s->str = malloc(STRING_INIT_SIZE);
     return s;
 }
 
-void str_append(str_t *i, char c)
+char *str_destroy(str_t *s)
 {
-    if (i->str_len + 1 == i->buf_size) {
-        i->buf_size *= 2;
-        i->str = realloc(i->str, i->buf_size);
+    char *tmp = s->str;
+    free(s);
+    return tmp;
+}
+
+void str_append(str_t *s, char c)
+{
+    if (s->str_len + 1 == s->buf_size) {
+        s->buf_size *= 2;
+        s->str = realloc(s->str, s->buf_size);
     }
-    i->str[i->str_len++] = c;
+    s->str[s->str_len++] = c;
 }
