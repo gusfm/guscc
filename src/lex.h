@@ -8,8 +8,6 @@ typedef struct {
     FILE *input;
     int line;
     int col;
-    int tok_line;
-    int tok_col;
 } lex_t;
 
 int lex_init(lex_t *l, FILE *input);
