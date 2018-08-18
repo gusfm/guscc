@@ -154,7 +154,7 @@ static token_t *read_number(lex_t *l, char c)
         }
         lex_ungetc(l, c);
         str_append(str, '\0');
-        return token_create_string(TOKEN_NUMBER, str_destroy(str));
+        return token_create_string(TOKEN_CONSTANT, str_destroy(str));
     }
 }
 

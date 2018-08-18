@@ -27,7 +27,7 @@ typedef enum {
     TOKEN_GE_OP,
     TOKEN_EQ_OP,
     TOKEN_NE_OP,
-    TOKEN_NUMBER,
+    TOKEN_CONSTANT,
     TOKEN_KW_AUTO,
     TOKEN_KW_BREAK,
     TOKEN_KW_CASE,
