@@ -1,23 +1,14 @@
 #include "lex.h"
 #include <ctype.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "error.h"
 #include "str.h"
 #include "token.h"
 
 int line;
 int col;
-
-static void warn(const char *format, ...)
-{
-    va_list args;
-    fprintf(stderr, "%d:%d: warning: ", line, col);
-    va_start(args, format);
-    vfprintf(stderr, format, args);
-    va_end(args);
-}
 
 static char lex_readc(lex_t *l)
 {
@@ -338,7 +329,7 @@ static char read_escaped_char(lex_t *l)
     }
     line = l->line;
     col = l->col;
-    warn("unknown escape character: \\%c", c);
+    ccwarn("unknown escape character: \\%c", c);
     return c;
 }
 
