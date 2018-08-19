@@ -9,6 +9,7 @@ add_library(guscc_obj OBJECT
     src/token.c
     src/error.c
     src/lex.c
+    src/parser.c
     )
 
 add_executable(guscc
@@ -20,6 +21,8 @@ enable_testing()
 add_executable(guscc_test
     $<TARGET_OBJECTS:guscc_obj>
     test/lex_test.c
+    test/parser_test.c
+    test/utils.c
     test/main.c
     )
 add_test(test guscc_test)

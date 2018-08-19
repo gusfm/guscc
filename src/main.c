@@ -1,17 +1,16 @@
-#include "lex.h"
+#include "parser.h"
 
 int main(void)
 {
-    lex_t lex;
+    parser_t parser;
     const char *filename = "test.c";
     FILE *f = fopen(filename, "r");
     if (f == NULL) {
         fprintf(stderr, "error: could not open %s\n", filename);
         return -1;
     }
-    if (lex_init(&lex, f) != 0) {
-        return -1;
-    }
+    parser_init(&parser, f);
+    parser_next(&parser);
     fclose(f);
     return 0;
 }

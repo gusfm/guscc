@@ -2,26 +2,7 @@
 #include <string.h>
 #include "lex.h"
 #include "ut.h"
-
-#if defined(__STRICT_ANSI__)
-
-static FILE *fmemopen(void *buf, size_t size, const char *mode)
-{
-    size_t written;
-    FILE *f = fopen("fmemopen_tmp.c", mode);
-    if (f == NULL) {
-        perror("fopen");
-        return NULL;
-    }
-    written = fwrite(buf, size, 1, f);
-    if (written != 1) {
-        fclose(f);
-        return NULL;
-    }
-    rewind(f);
-    return f;
-}
-#endif
+#include "utils.h"
 
 static int check_next_token(lex_t *l, token_type_t type)
 {
@@ -52,8 +33,8 @@ static int check_next_token_str(lex_t *l, token_type_t type, const char *s)
 static int lex_test_1(void)
 {
     lex_t lex;
-    char *src = "int main(void)\n{\n\treturn 42;\n}\n";
-    FILE *stream = fmemopen(src, strlen(src), "w+");
+    char src[] = "int main(void)\n{\n\treturn 42;\n}\n";
+    FILE *stream = fmemopen(src, sizeof(src) - 1, "w+");
     ASSERT(stream != NULL);
     ASSERT(lex_init(&lex, stream) == 0);
     ASSERT(check_next_token(&lex, TOKEN_KW_INT) == 0);
@@ -74,9 +55,9 @@ static int lex_test_1(void)
 static int lex_test_2(void)
 {
     lex_t lex;
-    char *src = "int main(void){if(1 < 2)return 0;else if (3 <= 4) return 1; "
-                "else 1 << 2; x<<=1; return 0;}";
-    FILE *stream = fmemopen(src, strlen(src), "w+");
+    char src[] = "int main(void){if(1 < 2)return 0;else if (3 <= 4) return 1; "
+                 "else 1 << 2; x<<=1; return 0;}";
+    FILE *stream = fmemopen(src, sizeof(src) - 1, "w+");
     ASSERT(stream != NULL);
     ASSERT(lex_init(&lex, stream) == 0);
     ASSERT(check_next_token(&lex, TOKEN_KW_INT) == 0);
@@ -125,9 +106,9 @@ static int lex_test_2(void)
 static int lex_test_3(void)
 {
     lex_t lex;
-    char *src =
+    char src[] =
         "int a = 0; printf(\"Hello World %d %s\n\", a, \"a\"); a += b; a-= b;";
-    FILE *stream = fmemopen(src, strlen(src), "w+");
+    FILE *stream = fmemopen(src, sizeof(src) - 1, "w+");
     ASSERT(stream != NULL);
     ASSERT(lex_init(&lex, stream) == 0);
     ASSERT(check_next_token(&lex, TOKEN_KW_INT) == 0);
@@ -161,9 +142,9 @@ static int lex_test_3(void)
 static int lex_test_4(void)
 {
     lex_t lex;
-    char *src = "typedef struct {char a; char *b; size_t c;} xyz_t; xyz_t x; "
-                "x.a = 'a'; x.b = &string; x.c = sizeof(x);";
-    FILE *stream = fmemopen(src, strlen(src), "w+");
+    char src[] = "typedef struct {char a; char *b; size_t c;} xyz_t; xyz_t x; "
+                 "x.a = 'a'; x.b = &string; x.c = sizeof(x);";
+    FILE *stream = fmemopen(src, sizeof(src) - 1, "w+");
     ASSERT(stream != NULL);
     ASSERT(lex_init(&lex, stream) == 0);
     ASSERT(check_next_token(&lex, TOKEN_KW_TYPEDEF) == 0);
