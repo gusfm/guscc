@@ -125,11 +125,12 @@ static token_t *read_ident(lex_t *l, char c)
         str_append(str, '\0');
         tok_str = str_destroy(str);
         tok_type = get_token_type(tok_str);
-        if (tok_type != TOKEN_IDENT) {
+        if (tok_type == TOKEN_IDENT) {
+            return token_create_string(tok_type, tok_str);
+        } else {
             free(tok_str);
-            tok_str = NULL;
+            return token_create(tok_type);
         }
-        return token_create_string(tok_type, tok_str);
     }
 }
 
