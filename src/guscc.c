@@ -9,6 +9,7 @@
 // - chibicc
 
 #include <ctype.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,10 +18,12 @@ typedef enum {
     TOKEN_IDENT = 0x100,
     TOKEN_NUM,
     TOKEN_STR,
-    TOKEN_KW_INT,
     TOKEN_KW_CHAR,
+    TOKEN_KW_IF,
+    TOKEN_KW_INT,
     TOKEN_KW_RETURN,
     TOKEN_KW_VOID,
+    TOKEN_KW_WHILE,
     TOKEN_EOF
 } token_type_t;
 
@@ -37,6 +40,15 @@ typedef struct {
     int line;    // Line number of file
     int col;     // Column number of file
 } lex_t;
+
+typedef struct {
+    lex_t l;             // Lexer
+    token_t *next_token; // Cached lookahead token (NULL = not loaded)
+} parser_t;
+
+// Foward declarations
+bool parser_declarator(parser_t *p);
+bool parser_compound_statement(parser_t *p);
 
 token_t *token_create(token_type_t type, char *start, char *end)
 {
@@ -59,28 +71,45 @@ void token_print(token_t *t)
         printf("%c ", *t->sval);
     } else if (type == TOKEN_IDENT || type == TOKEN_STR || type == TOKEN_NUM) {
         printf("%.*s ", t->len, t->sval);
-    } else if (type == TOKEN_KW_INT) {
-        printf("INT ");
     } else if (type == TOKEN_KW_CHAR) {
         printf("CHAR ");
+    } else if (type == TOKEN_KW_IF) {
+        printf("IF ");
+    } else if (type == TOKEN_KW_INT) {
+        printf("INT ");
     } else if (type == TOKEN_KW_RETURN) {
         printf("RETURN ");
     } else if (type == TOKEN_KW_VOID) {
         printf("VOID ");
+    } else if (type == TOKEN_KW_WHILE) {
+        printf("WHILE ");
     } else if (type == TOKEN_EOF)
         printf("EOF");
     else
         printf("\ninvalid token %d\n", t->type);
 }
 
-int lex_init(lex_t *l, char *start, char *end)
+const char *token_type_to_str(token_type_t type, char *str, size_t len)
+{
+    if (type > 32 && type < 127) {
+        snprintf(str, len, "'%c'", (char)type);
+    } else if (type == TOKEN_IDENT) {
+        snprintf(str, len, "identifier");
+    } else if (type == TOKEN_NUM) {
+        snprintf(str, len, "constant");
+    } else {
+        snprintf(str, len, "not implemented");
+    }
+    return str;
+}
+
+void lex_init(lex_t *l, char *start, char *end)
 {
     l->start = start;
     l->end = end;
     l->p = start;
     l->line = 1;
     l->col = 1;
-    return 0;
 }
 
 static char lex_readc(lex_t *l)
@@ -105,14 +134,18 @@ static void lex_ungetc(lex_t *l)
 
 static token_type_t get_token_type(char *s, int len)
 {
-    if (strncmp(s, "int", len) == 0)
-        return TOKEN_KW_INT;
     if (strncmp(s, "char", len) == 0)
         return TOKEN_KW_CHAR;
+    if (strncmp(s, "if", len) == 0)
+        return TOKEN_KW_IF;
+    if (strncmp(s, "int", len) == 0)
+        return TOKEN_KW_INT;
     if (strncmp(s, "return", len) == 0)
         return TOKEN_KW_RETURN;
     if (strncmp(s, "void", len) == 0)
         return TOKEN_KW_VOID;
+    if (strncmp(s, "while", len) == 0)
+        return TOKEN_KW_WHILE;
     return TOKEN_IDENT;
 }
 
@@ -201,7 +234,7 @@ token_t *lex_next(lex_t *l)
     }
 }
 
-char *load_file_to_string(const char *filename, long *length)
+char *load_file_to_string(const char *filename, long *size)
 {
     FILE *f = fopen(filename, "rb");
     char *buffer;
@@ -234,31 +267,269 @@ char *load_file_to_string(const char *filename, long *length)
         return NULL;
     }
     buffer[len] = '\0';
-    *length = len;
+    *size = len;
     fclose(f);
     return buffer;
 }
 
-int lexer(const char *filename, FILE *out)
+int lexer(char *buf, int size)
 {
     lex_t lex;
     token_t *t;
-    FILE *f = fopen(filename, "r");
-    if (f == NULL) {
-        fprintf(stderr, "error: could not open %s\n", filename);
-        return -1;
-    }
 
-    long length;
-    char *buf = load_file_to_string(filename, &length);
-
-    lex_init(&lex, buf, buf + length);
+    lex_init(&lex, buf, buf + size);
 
     while ((t = lex_next(&lex)) != NULL) {
         token_print(t);
         token_destroy(t);
     }
-    fprintf(out, "\n");
+    printf("\n");
+
+    return 0;
+}
+
+void parser_init(parser_t *p, char *buf, size_t size)
+{
+    lex_init(&p->l, buf, buf + size);
+    p->next_token = NULL;
+}
+
+void parser_finish(parser_t *p)
+{
+    if (p->next_token) {
+        token_destroy(p->next_token);
+        p->next_token = NULL;
+    }
+}
+
+token_t *parser_peek(parser_t *p)
+{
+    if (p->next_token == NULL) {
+        p->next_token = lex_next(&p->l);
+    }
+    return p->next_token;
+}
+
+token_t *parser_next(parser_t *p)
+{
+    if (p->next_token != NULL) {
+        token_t *t = p->next_token;
+        p->next_token = NULL;
+        return t;
+    }
+    return lex_next(&p->l);
+}
+
+bool parser_accept(parser_t *p, token_type_t type)
+{
+    token_t *t = parser_peek(p);
+    if (t->type == type) {
+        printf("OK: '%.*s'\n", t->len, t->sval);
+        parser_next(p); // consume it
+        return true;
+    }
+    return false;
+}
+
+bool parser_expect(parser_t *p, token_type_t type)
+{
+    int ret;
+    token_t *t = parser_next(p);
+    if (t->type == type) {
+        printf("OK: '%.*s'\n", t->len, t->sval);
+        ret = true;
+    } else {
+        char str[100];
+        fprintf(stderr, "Expected %s but received '%.*s'\n",
+                token_type_to_str(type, str, 100), t->len, t->sval);
+        ret = false;
+    }
+    token_destroy(t);
+    return ret;
+}
+
+bool parser_declaration_specifiers(parser_t *p)
+{
+    int ret = true;
+    token_t *t;
+    t = parser_next(p);
+    if (t->type == TOKEN_KW_INT) {
+        printf("INT\n");
+    } else if (t->type == TOKEN_KW_CHAR) {
+        printf("CHAR\n");
+    } else if (t->type == TOKEN_KW_VOID) {
+        printf("VOID\n");
+    } else {
+        fprintf(stderr, "Expected type but received '%.*s'\n", t->len, t->sval);
+        ret = false;
+    }
+    token_destroy(t);
+    return ret;
+}
+
+bool parser_parameter_declaration(parser_t *p)
+{
+    if (!parser_declaration_specifiers(p))
+        return false;
+    if (!parser_declarator(p))
+        return false;
+    return true;
+}
+
+bool parser_parameter_list(parser_t *p)
+{
+    if (!parser_parameter_declaration(p))
+        return false;
+
+    while (parser_accept(p, ',')) {
+        if (!parser_parameter_declaration(p))
+            return false;
+    }
+    return true;
+}
+
+int parser_direct_declarator(parser_t *p)
+{
+    // Identifier
+    if (!parser_expect(p, TOKEN_IDENT))
+        return false;
+
+    // Declarator
+    if (parser_accept(p, '(')) {
+        if (parser_accept(p, ')'))
+            return true;
+        if (!parser_parameter_list(p))
+            return false;
+        if (!parser_expect(p, ')'))
+            return false;
+        return true;
+    }
+
+    return true;
+}
+
+bool parser_pointer(parser_t *p)
+{
+    if (!parser_expect(p, '*'))
+        return false;
+    while (1) {
+        if (!parser_accept(p, '*'))
+            return true;
+    }
+    return true;
+}
+
+bool parser_declarator(parser_t *p)
+{
+    if (parser_peek(p)->type == '*') {
+        parser_pointer(p);
+    }
+    if (!parser_direct_declarator(p))
+        return false;
+    return true;
+}
+
+bool parser_expression(parser_t *p)
+{
+    // TODO
+    if (!parser_expect(p, TOKEN_NUM)) {
+        return false;
+    }
+    return true;
+}
+
+bool parser_expression_statement(parser_t *p)
+{
+    if (parser_accept(p, ';')) {
+        return true;
+    }
+    if (!parser_expression(p)) {
+        return false;
+    }
+    if (!parser_expect(p, ';')) {
+        return false;
+    }
+    return true;
+}
+
+bool parser_jump_statement(parser_t *p)
+{
+    if (!parser_expect(p, TOKEN_KW_RETURN)) {
+        if (parser_accept(p, ';')) {
+            return true;
+        }
+        if (!parser_expression(p)) {
+            return false;
+        }
+        if (!parser_expect(p, ';')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool parser_statement(parser_t *p)
+{
+    token_t *t = parser_peek(p);
+    if (t->type == '{') {
+        if (!parser_compound_statement(p))
+            return false;
+    } else if (t->type == TOKEN_KW_IF) {
+        // TODO: selection statement
+    } else if (t->type == TOKEN_KW_WHILE) {
+        // TODO: iteration statement
+    } else if (t->type == TOKEN_KW_RETURN) {
+        if (!parser_jump_statement(p))
+            return false;
+    } else {
+        if (!parser_expression_statement(p))
+            return false;
+    }
+    return true;
+}
+
+bool parser_statement_list(parser_t *p)
+{
+    if (!parser_statement(p))
+        return false;
+    while (1) {
+        if (parser_peek(p)->type == '}') {
+            return true;
+        }
+        if (!parser_statement(p))
+            return false;
+    }
+    return true;
+}
+
+bool parser_compound_statement(parser_t *p)
+{
+    if (!parser_expect(p, '{'))
+        return false;
+    if (!parser_statement_list(p))
+        return false;
+    if (!parser_expect(p, '}'))
+        return false;
+    return true;
+}
+
+bool parser_function_definition(parser_t *p)
+{
+    if (!parser_declaration_specifiers(p))
+        return false;
+    if (!parser_declarator(p))
+        return false;
+    if (!parser_compound_statement(p))
+        return false;
+    return true;
+}
+
+int parser(char *buf, int size)
+{
+    parser_t p;
+
+    parser_init(&p, buf, size);
+    parser_function_definition(&p);
 
     return 0;
 }
@@ -269,6 +540,18 @@ int main(int argc, char **argv)
         fprintf(stderr, "error: syntax: guscc <file.c>\n");
         return -1;
     }
-    lexer(argv[1], stdout);
+
+    long size;
+    char *buf = load_file_to_string(argv[1], &size);
+    if (buf == NULL) {
+        fprintf(stderr, "error: could not open %s\n", argv[1]);
+        return -1;
+    }
+
+    printf("Lexer debug output:\n");
+    lexer(buf, size);
+
+    printf("Parser debug output:\n");
+    parser(buf, size);
     return 0;
 }
