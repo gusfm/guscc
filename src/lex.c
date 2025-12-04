@@ -4,6 +4,9 @@
 #include <stdio.h>
 #include <string.h>
 
+int tok_line;
+int tok_col;
+
 void lex_init(lex_t *l, char *start, char *end)
 {
     l->start = start;
@@ -59,7 +62,7 @@ static token_t *read_number(lex_t *l)
             continue;
         }
         lex_ungetc(l);
-        return token_create(TOKEN_NUM, s, l->p);
+        return token_create(TOKEN_NUM, s, l->p, tok_line, tok_col);
     }
 }
 
@@ -73,7 +76,7 @@ static token_t *read_ident(lex_t *l)
         }
         lex_ungetc(l);
         token_type_t tok_type = get_token_type(s, l->p - s);
-        return token_create(tok_type, s, l->p);
+        return token_create(tok_type, s, l->p, tok_line, tok_col);
     }
 }
 
@@ -85,7 +88,7 @@ static token_t *read_string(lex_t *l)
         if (c != '"') {
             continue;
         }
-        return token_create(TOKEN_STR, s, l->p);
+        return token_create(TOKEN_STR, s, l->p, tok_line, tok_col);
     }
 }
 
@@ -96,6 +99,8 @@ static char lex_next_char(lex_t *l)
         if (isspace(c)) {
             continue;
         }
+        tok_line = l->line;
+        tok_col = l->col - 1;
         return c;
     }
     return EOF;
@@ -116,7 +121,7 @@ token_t *lex_next(lex_t *l)
         case ']':
         case '{':
         case '}':
-            return token_create(c, l->p - 1, l->p);
+            return token_create(c, l->p - 1, l->p, tok_line, tok_col);
         case '0':
         case '1':
         case '2':

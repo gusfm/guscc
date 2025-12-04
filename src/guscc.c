@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "lex.h"
 #include "parser.h"
@@ -79,6 +80,18 @@ int parser(char *buf, int size)
     return 0;
 }
 
+void debug_file(char *buf)
+{
+    char *endline, *ptr = buf;
+    int line = 1;
+    while ((endline = strchr(ptr, '\n')) != NULL) {
+        printf("%d: ", line);
+        printf("%.*s\n", (int)(endline - ptr), ptr);
+        ++line;
+        ptr = endline + 1;
+    }
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 2) {
@@ -93,10 +106,13 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    printf("Lexer debug output:\n");
+    printf("File debug output:\n");
+    debug_file(buf);
+
+    printf("\nLexer debug output:\n");
     lexer(buf, size);
 
-    printf("Parser debug output:\n");
+    printf("\nParser debug output:\n");
     parser(buf, size);
     return 0;
 }

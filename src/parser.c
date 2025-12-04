@@ -3,8 +3,10 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include "ast.h"
+
 // Foward declarations
-bool parser_declarator(parser_t *p);
+node_t *parser_declarator(parser_t *p);
 bool parser_compound_statement(parser_t *p);
 
 void parser_init(parser_t *p, char *buf, size_t size)
@@ -43,88 +45,132 @@ bool parser_accept(parser_t *p, token_type_t type)
 {
     token_t *t = parser_peek(p);
     if (t->type == type) {
-        printf("OK: '%.*s'\n", t->len, t->sval);
         parser_next(p); // consume it
         return true;
     }
     return false;
 }
 
-bool parser_expect(parser_t *p, token_type_t type)
+token_t *parser_expect_token(parser_t *p, token_type_t type)
 {
-    int ret;
     token_t *t = parser_next(p);
     if (t->type == type) {
-        printf("OK: '%.*s'\n", t->len, t->sval);
-        ret = true;
+        return t;
     } else {
         char str[100];
         fprintf(stderr, "Expected %s but received '%.*s'\n",
                 token_type_to_str(type, str, 100), t->len, t->sval);
-        ret = false;
+        token_destroy(t);
+        return NULL;
     }
-    token_destroy(t);
-    return ret;
 }
 
-bool parser_declaration_specifiers(parser_t *p)
+bool parser_expect(parser_t *p, token_type_t type)
 {
-    int ret = true;
-    token_t *t;
-    t = parser_next(p);
-    if (t->type == TOKEN_KW_INT) {
-        printf("INT\n");
-    } else if (t->type == TOKEN_KW_CHAR) {
-        printf("CHAR\n");
-    } else if (t->type == TOKEN_KW_VOID) {
-        printf("VOID\n");
+    token_t *t = parser_expect_token(p, type);
+    if (t != NULL) {
+        token_destroy(t);
+        return true;
+    }
+    return false;
+}
+
+node_t *parser_type_specifier(parser_t *p)
+{
+    token_t *tok = parser_next(p);
+    node_t *node = node_create(ND_TYPE_SPEC, tok->line, tok->col);
+    if (tok->type == TOKEN_KW_VOID) {
+        node->type_spec = ND_TYPE_VOID;
+    } else if (tok->type == TOKEN_KW_CHAR) {
+        node->type_spec = ND_TYPE_CHAR;
+    } else if (tok->type == TOKEN_KW_INT) {
+        node->type_spec = ND_TYPE_INT;
     } else {
-        fprintf(stderr, "Expected type but received '%.*s'\n", t->len, t->sval);
-        ret = false;
+        token_print_error(tok, "type");
+        node_destroy(node);
+        node = NULL;
     }
-    token_destroy(t);
-    return ret;
+    token_destroy(tok);
+    return node;
 }
 
-bool parser_parameter_declaration(parser_t *p)
+node_t *parser_declaration_specifiers(parser_t *p)
 {
-    if (!parser_declaration_specifiers(p))
-        return false;
-    if (!parser_declarator(p))
-        return false;
-    return true;
+    node_t *type_spec = parser_type_specifier(p);
+    if (type_spec == NULL) {
+        return NULL;
+    }
+    node_t *node = node_create(ND_DECL_SPEC, type_spec->line, type_spec->col);
+    node->decl_spec.type_spec = type_spec;
+    return node;
 }
 
-bool parser_parameter_list(parser_t *p)
+node_t *parser_parameter_declaration(parser_t *p)
 {
-    if (!parser_parameter_declaration(p))
-        return false;
+    node_t *decl_spec = parser_declaration_specifiers(p);
+    if (decl_spec == NULL) {
+        return NULL;
+    }
+    node_t *declarator = parser_declarator(p);
+    if (declarator == NULL) {
+        node_destroy(decl_spec);
+        return NULL;
+    }
+    node_t *n = node_create(ND_PARAM_DECL, decl_spec->line, decl_spec->col);
+    n->param_decl.decl_spec = decl_spec;
+    n->param_decl.declarator = declarator;
+    return n;
+}
 
+node_t *parser_parameter_list(parser_t *p)
+{
+    node_t *param_decl = parser_parameter_declaration(p);
+    if (param_decl == NULL)
+        return NULL;
+
+    node_t *n = node_create(ND_PARAM_LIST, param_decl->line, param_decl->col);
+    n->param_list.params[0] = param_decl;
+
+    int nparams = 1;
     while (parser_accept(p, ',')) {
-        if (!parser_parameter_declaration(p))
-            return false;
+        param_decl = parser_parameter_declaration(p);
+        if (param_decl == NULL)
+            return NULL;
+        n->param_list.params[nparams++] = param_decl;
     }
-    return true;
+    n->param_list.nparams = nparams;
+    return n;
 }
 
-int parser_direct_declarator(parser_t *p)
+node_t *parser_direct_declarator(parser_t *p)
 {
     // Identifier
-    if (!parser_expect(p, TOKEN_IDENT))
-        return false;
+    token_t *ident = parser_expect_token(p, TOKEN_IDENT);
+    if (ident == NULL) {
+        return NULL;
+    }
+
+    node_t *n = node_create(ND_DIRECT_DECL, ident->line, ident->col);
+    n->direct_decl.ident.str = ident->sval;
+    n->direct_decl.ident.len = ident->len;
+    n->direct_decl.param_list = NULL;
 
     // Declarator
     if (parser_accept(p, '(')) {
         if (parser_accept(p, ')'))
-            return true;
-        if (!parser_parameter_list(p))
-            return false;
-        if (!parser_expect(p, ')'))
-            return false;
-        return true;
+            return n;
+        node_t *param_list = parser_parameter_list(p);
+        if (!param_list) {
+            node_destroy(n);
+            return NULL;
+        }
+        if (!parser_expect(p, ')')) {
+            node_destroy(n);
+            return NULL;
+        }
+        n->direct_decl.param_list = param_list;
     }
-
-    return true;
+    return n;
 }
 
 bool parser_pointer(parser_t *p)
@@ -138,14 +184,18 @@ bool parser_pointer(parser_t *p)
     return true;
 }
 
-bool parser_declarator(parser_t *p)
+node_t *parser_declarator(parser_t *p)
 {
     if (parser_peek(p)->type == '*') {
-        parser_pointer(p);
+        if (!parser_pointer(p)) {
+            return NULL;
+        }
+        // TODO
     }
-    if (!parser_direct_declarator(p))
-        return false;
-    return true;
+    node_t *direct_decl = parser_direct_declarator(p);
+    if (direct_decl == NULL)
+        return NULL;
+    return direct_decl;
 }
 
 bool parser_expression(parser_t *p)
@@ -232,21 +282,42 @@ bool parser_compound_statement(parser_t *p)
     return true;
 }
 
-bool parser_function_definition(parser_t *p)
+node_t *parser_function_definition(parser_t *p)
 {
-    if (!parser_declaration_specifiers(p))
-        return false;
-    if (!parser_declarator(p))
-        return false;
+    node_t *decl_spec = parser_declaration_specifiers(p);
+    if (decl_spec == NULL) {
+        return NULL;
+    }
+    node_t *declarator = parser_declarator(p);
+    if (declarator == NULL) {
+        node_destroy(decl_spec);
+        return NULL;
+    }
+#if 1
     if (!parser_compound_statement(p))
-        return false;
-    return true;
+        return NULL;
+#else
+    node_t *comp_stmt = parser_compound_statement(p);
+    if (ncs == NULL) {
+        node_destroy(decl_spec);
+        node_destroy(declarator);
+        return NULL;
+    }
+#endif
+    node_t *node = node_create(ND_FUNC, decl_spec->line, decl_spec->col);
+    node->func.decl_spec = decl_spec;
+    node->func.declarator = declarator;
+    node->func.comp_stmt = NULL;
+    return node;
 }
 
 bool parser_translation_unit(parser_t *p)
 {
-    if (!parser_function_definition(p))
+    node_t *func = parser_function_definition(p);
+    if (func == NULL) {
         return false;
+    }
+    ast_print(func, 0);
     return true;
 }
 
