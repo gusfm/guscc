@@ -7,7 +7,7 @@
 
 // Foward declarations
 node_t *parser_declarator(parser_t *p);
-bool parser_compound_statement(parser_t *p);
+node_t *parser_compound_statement(parser_t *p);
 
 void parser_init(parser_t *p, char *buf, size_t size)
 {
@@ -203,88 +203,117 @@ node_t *parser_declarator(parser_t *p)
     return n;
 }
 
-bool parser_expression(parser_t *p)
+node_t *parser_expression(parser_t *p)
 {
-    // TODO
-    if (!parser_expect(p, TOKEN_NUM)) {
-        return false;
-    }
-    return true;
+    token_t *tok = parser_expect_token(p, TOKEN_NUM);
+    if (tok == NULL)
+        return NULL;
+    node_t *n = node_create(ND_NUM, tok->line, tok->col);
+    n->num.val.str = tok->sval;
+    n->num.val.len = tok->len;
+    token_destroy(tok);
+    return n;
 }
 
-bool parser_expression_statement(parser_t *p)
+node_t *parser_expression_statement(parser_t *p)
 {
+    token_t *peek = parser_peek(p);
+    node_t *n = node_create(ND_EXPR_STMT, peek->line, peek->col);
     if (parser_accept(p, ';')) {
-        return true;
+        n->expr_stmt.expr = NULL;
+        return n;
     }
-    if (!parser_expression(p)) {
-        return false;
+    node_t *expr = parser_expression(p);
+    if (expr == NULL) {
+        node_destroy(n);
+        return NULL;
     }
     if (!parser_expect(p, ';')) {
-        return false;
+        node_destroy(expr);
+        node_destroy(n);
+        return NULL;
     }
-    return true;
+    n->expr_stmt.expr = expr;
+    return n;
 }
 
-bool parser_jump_statement(parser_t *p)
+node_t *parser_jump_statement(parser_t *p)
 {
-    if (!parser_expect(p, TOKEN_KW_RETURN)) {
-        if (parser_accept(p, ';')) {
-            return true;
-        }
-        if (!parser_expression(p)) {
-            return false;
-        }
-        if (!parser_expect(p, ';')) {
-            return false;
-        }
+    token_t *ret_tok = parser_expect_token(p, TOKEN_KW_RETURN);
+    if (ret_tok == NULL)
+        return NULL;
+    node_t *n = node_create(ND_RETURN_STMT, ret_tok->line, ret_tok->col);
+    token_destroy(ret_tok);
+    if (parser_accept(p, ';')) {
+        n->return_stmt.expr = NULL;
+        return n;
     }
-    return true;
+    node_t *expr = parser_expression(p);
+    if (expr == NULL) {
+        node_destroy(n);
+        return NULL;
+    }
+    if (!parser_expect(p, ';')) {
+        node_destroy(expr);
+        node_destroy(n);
+        return NULL;
+    }
+    n->return_stmt.expr = expr;
+    return n;
 }
 
-bool parser_statement(parser_t *p)
+node_t *parser_statement(parser_t *p)
 {
     token_t *t = parser_peek(p);
     if (t->type == '{') {
-        if (!parser_compound_statement(p))
-            return false;
+        return parser_compound_statement(p);
     } else if (t->type == TOKEN_KW_IF) {
         // TODO: selection statement
+        return NULL;
     } else if (t->type == TOKEN_KW_WHILE) {
         // TODO: iteration statement
+        return NULL;
     } else if (t->type == TOKEN_KW_RETURN) {
-        if (!parser_jump_statement(p))
-            return false;
+        return parser_jump_statement(p);
     } else {
-        if (!parser_expression_statement(p))
-            return false;
+        return parser_expression_statement(p);
     }
-    return true;
 }
 
-bool parser_statement_list(parser_t *p)
+bool parser_statement_list(parser_t *p, node_t *comp)
 {
-    if (!parser_statement(p))
+    node_t *stmt = parser_statement(p);
+    if (stmt == NULL)
         return false;
+    comp->comp_stmt.stmts[comp->comp_stmt.nstmts++] = stmt;
     while (1) {
         if (parser_peek(p)->type == '}') {
             return true;
         }
-        if (!parser_statement(p))
+        stmt = parser_statement(p);
+        if (stmt == NULL)
             return false;
+        comp->comp_stmt.stmts[comp->comp_stmt.nstmts++] = stmt;
     }
     return true;
 }
 
-bool parser_compound_statement(parser_t *p)
+node_t *parser_compound_statement(parser_t *p)
 {
-    if (!parser_expect(p, '{'))
-        return false;
-    if (!parser_statement_list(p))
-        return false;
-    if (!parser_expect(p, '}'))
-        return false;
-    return true;
+    token_t *lbrace = parser_expect_token(p, '{');
+    if (lbrace == NULL)
+        return NULL;
+    node_t *n = node_create(ND_COMP_STMT, lbrace->line, lbrace->col);
+    token_destroy(lbrace);
+    if (!parser_statement_list(p, n)) {
+        node_destroy(n);
+        return NULL;
+    }
+    if (!parser_expect(p, '}')) {
+        node_destroy(n);
+        return NULL;
+    }
+    return n;
 }
 
 node_t *parser_function_definition(parser_t *p)
@@ -298,21 +327,16 @@ node_t *parser_function_definition(parser_t *p)
         node_destroy(decl_spec);
         return NULL;
     }
-#if 1
-    if (!parser_compound_statement(p))
-        return NULL;
-#else
     node_t *comp_stmt = parser_compound_statement(p);
-    if (ncs == NULL) {
+    if (comp_stmt == NULL) {
         node_destroy(decl_spec);
         node_destroy(declarator);
         return NULL;
     }
-#endif
     node_t *node = node_create(ND_FUNC, decl_spec->line, decl_spec->col);
     node->func.decl_spec = decl_spec;
     node->func.declarator = declarator;
-    node->func.comp_stmt = NULL;
+    node->func.comp_stmt = comp_stmt;
     return node;
 }
 

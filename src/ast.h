@@ -10,6 +10,10 @@ typedef enum {
     ND_PARAM_DECL,
     ND_PARAM_LIST,
     ND_DIRECT_DECL,
+    ND_COMP_STMT,    // Compound statement  { ... }
+    ND_RETURN_STMT,  // return [expr] ;
+    ND_EXPR_STMT,    // [expr] ;
+    ND_NUM,          // Number literal
 } node_kind_t;
 
 typedef struct node node_t;
@@ -55,6 +59,23 @@ struct node {
             int pointer_level;
             node_t *param_list;
         } direct_decl;
+
+        struct {
+            int nstmts;
+            node_t *stmts[64]; // MAX_STMTS == 64
+        } comp_stmt;
+
+        struct {
+            node_t *expr;   // NULL for bare `return;`
+        } return_stmt;
+
+        struct {
+            node_t *expr;   // NULL for empty statement `;`
+        } expr_stmt;
+
+        struct {
+            node_str_t val; // raw token string (not null-terminated)
+        } num;
     };
 };
 

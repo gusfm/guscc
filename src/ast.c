@@ -47,6 +47,7 @@ void ast_print(node_t *n, int indent)
             printf("Function definition:%d:%d:\n", n->line, n->col);
             ast_print(n->func.decl_spec, indent + 1);
             ast_print(n->func.declarator, indent + 1);
+            ast_print(n->func.comp_stmt, indent + 1);
             break;
         case ND_DECL_SPEC:
             printf("Declaration specifiers:%d:%d:\n", n->line, n->col);
@@ -74,6 +75,25 @@ void ast_print(node_t *n, int indent)
             if (n->direct_decl.param_list) {
                 ast_print(n->direct_decl.param_list, indent + 1);
             }
+            break;
+        case ND_COMP_STMT:
+            printf("Compound statement:%d:%d:\n", n->line, n->col);
+            for (int i = 0; i < n->comp_stmt.nstmts; ++i)
+                ast_print(n->comp_stmt.stmts[i], indent + 1);
+            break;
+        case ND_RETURN_STMT:
+            printf("Return statement:%d:%d:\n", n->line, n->col);
+            if (n->return_stmt.expr)
+                ast_print(n->return_stmt.expr, indent + 1);
+            break;
+        case ND_EXPR_STMT:
+            printf("Expression statement:%d:%d:\n", n->line, n->col);
+            if (n->expr_stmt.expr)
+                ast_print(n->expr_stmt.expr, indent + 1);
+            break;
+        case ND_NUM:
+            printf("Number:%d:%d: %.*s\n", n->line, n->col,
+                   n->num.val.len, n->num.val.str);
             break;
     }
 }
