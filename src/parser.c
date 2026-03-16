@@ -173,29 +173,34 @@ node_t *parser_direct_declarator(parser_t *p)
     return n;
 }
 
-bool parser_pointer(parser_t *p)
+int parser_pointer(parser_t *p)
 {
+    int pointer_level = 0;
     if (!parser_expect(p, '*'))
-        return false;
+        return pointer_level;
+    ++pointer_level;
     while (1) {
         if (!parser_accept(p, '*'))
-            return true;
+            return pointer_level;
+        ++pointer_level;
     }
-    return true;
+    return pointer_level;
 }
 
 node_t *parser_declarator(parser_t *p)
 {
+    int pointer_level = 0;
     if (parser_peek(p)->type == '*') {
-        if (!parser_pointer(p)) {
+        pointer_level = parser_pointer(p);
+        if (pointer_level <= 0) {
             return NULL;
         }
-        // TODO
     }
-    node_t *direct_decl = parser_direct_declarator(p);
-    if (direct_decl == NULL)
+    node_t *n = parser_direct_declarator(p);
+    if (n == NULL)
         return NULL;
-    return direct_decl;
+    n->direct_decl.pointer_level = pointer_level;
+    return n;
 }
 
 bool parser_expression(parser_t *p)

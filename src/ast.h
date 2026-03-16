@@ -52,6 +52,7 @@ struct node {
 
         struct {
             node_str_t ident;
+            int pointer_level;
             node_t *param_list;
         } direct_decl;
     };

@@ -22,6 +22,19 @@ static void print_indent(int indent)
         printf("  ");
 }
 
+static const char *type_spec_to_str(int type_spec)
+{
+    switch (type_spec) {
+        case ND_TYPE_VOID:
+            return "void";
+        case ND_TYPE_CHAR:
+            return "char";
+        case ND_TYPE_INT:
+            return "int";
+    }
+    return "invalid type";
+}
+
 void ast_print(node_t *n, int indent)
 {
     print_indent(indent);
@@ -40,7 +53,8 @@ void ast_print(node_t *n, int indent)
             ast_print(n->decl_spec.type_spec, indent + 1);
             break;
         case ND_TYPE_SPEC:
-            printf("Type specifier:%d:%d: %d\n", n->line, n->col, n->type_spec);
+            printf("Type specifier:%d:%d: %s\n", n->line, n->col,
+                   type_spec_to_str(n->type_spec));
             break;
         case ND_PARAM_DECL:
             printf("Parameter declaration:%d:%d:\n", n->line, n->col);
@@ -55,8 +69,8 @@ void ast_print(node_t *n, int indent)
             break;
         case ND_DIRECT_DECL:
             printf("Direct declarator:%d:%d: ", n->line, n->col);
-            printf("%.*s\n", n->direct_decl.ident.len,
-                   n->direct_decl.ident.str);
+            printf("%.*s pointer_level=%d\n", n->direct_decl.ident.len,
+                   n->direct_decl.ident.str, n->direct_decl.pointer_level);
             if (n->direct_decl.param_list) {
                 ast_print(n->direct_decl.param_list, indent + 1);
             }
