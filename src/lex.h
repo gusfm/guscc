@@ -11,7 +11,7 @@ typedef struct {
     int col;     // Column number of file
 } lex_t;
 
-void lex_init(lex_t *l, char *start, char *end);
+void lex_init(lex_t *l, char *start, size_t size);
 token_t *lex_next(lex_t *l);
 
 #endif /* LEX_H */

@@ -7,10 +7,10 @@
 int tok_line;
 int tok_col;
 
-void lex_init(lex_t *l, char *start, char *end)
+void lex_init(lex_t *l, char *start, size_t size)
 {
     l->start = start;
-    l->end = end;
+    l->end = start + size;
     l->p = start;
     l->line = 1;
     l->col = 1;

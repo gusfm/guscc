@@ -58,7 +58,7 @@ int lexer(char *buf, int size)
     lex_t lex;
     token_t *t;
 
-    lex_init(&lex, buf, buf + size);
+    lex_init(&lex, buf, size);
 
     while ((t = lex_next(&lex)) != NULL) {
         token_print(t);

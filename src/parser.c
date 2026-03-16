@@ -11,7 +11,7 @@ node_t *parser_compound_statement(parser_t *p);
 
 void parser_init(parser_t *p, char *buf, size_t size)
 {
-    lex_init(&p->l, buf, buf + size);
+    lex_init(&p->l, buf, size);
     p->next_token = NULL;
 }
 
