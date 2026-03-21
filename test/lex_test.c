@@ -2,7 +2,6 @@
 #include <string.h>
 #include "lex.h"
 #include "ut.h"
-#include "utils.h"
 
 static int check_next_token(lex_t *l, token_type_t type)
 {

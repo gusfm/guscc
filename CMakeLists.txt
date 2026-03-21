@@ -19,6 +19,7 @@ add_executable(guscc
 add_executable(guscc_test
     $<TARGET_OBJECTS:guscc_obj>
     test/lex_test.c
+    test/guscc_test.c
     test/main.c
     )
 

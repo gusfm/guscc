@@ -113,6 +113,5 @@ int main(int argc, char **argv)
     lexer(buf, size);
 
     printf("\nParser debug output:\n");
-    parser(buf, size);
-    return 0;
+    return parser(buf, size);
 }
