@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "codegen.h"
 #include "lex.h"
 #include "parser.h"
 
@@ -69,15 +70,29 @@ int lexer(char *buf, int size)
     return 0;
 }
 
-int parser(char *buf, int size)
+node_t *parser(char *buf, int size)
 {
     parser_t p;
 
     parser_init(&p, buf, size);
-    if (parser_exec(&p) != 0)
-        return -1;
+    node_t *ast = parser_exec(&p);
+    parser_finish(&p);
+    return ast;
+}
 
-    return 0;
+int codegen(node_t *ast, const char *outpath)
+{
+    FILE *out = fopen(outpath, "w");
+    if (!out) {
+        perror("fopen");
+        return -1;
+    }
+    codegen_t cg;
+    codegen_init(&cg, out);
+    int ret = codegen_exec(&cg, ast);
+    codegen_finish(&cg);
+    fclose(out);
+    return ret;
 }
 
 void debug_file(char *buf)
@@ -112,6 +127,24 @@ int main(int argc, char **argv)
     printf("\nLexer debug output:\n");
     lexer(buf, size);
 
+    char outpath[512];
+    strncpy(outpath, argv[1], sizeof(outpath) - 1);
+    outpath[sizeof(outpath) - 1] = '\0';
+    size_t inlen = strlen(outpath);
+    if (inlen >= 2 && outpath[inlen - 2] == '.' && outpath[inlen - 1] == 'c')
+        outpath[inlen - 1] = 's';
+    else
+        strncat(outpath, ".s", sizeof(outpath) - inlen - 1);
+
     printf("\nParser debug output:\n");
-    return parser(buf, size);
+    node_t *ast = parser(buf, size);
+    if (ast == NULL) {
+        free(buf);
+        return -1;
+    }
+
+    int ret = codegen(ast, outpath);
+    node_destroy(ast);
+    free(buf);
+    return ret;
 }

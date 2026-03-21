@@ -9,6 +9,7 @@ add_library(guscc_obj OBJECT
     src/lex.c
     src/ast.c
     src/parser.c
+    src/codegen.c
 )
 
 add_executable(guscc

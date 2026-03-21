@@ -340,20 +340,17 @@ node_t *parser_function_definition(parser_t *p)
     return node;
 }
 
-bool parser_translation_unit(parser_t *p)
+node_t *parser_translation_unit(parser_t *p)
 {
     node_t *func = parser_function_definition(p);
     if (func == NULL) {
-        return false;
+        return NULL;
     }
     ast_print(func, 0);
-    return true;
+    return func;
 }
 
-int parser_exec(parser_t *p)
+node_t *parser_exec(parser_t *p)
 {
-    if (!parser_translation_unit(p)) {
-        return -1;
-    }
-    return 0;
+    return parser_translation_unit(p);
 }
