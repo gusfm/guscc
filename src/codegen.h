@@ -8,6 +8,7 @@ typedef struct {
     FILE *out;             // open output file (.s), owned by the caller
     const char *func_name; // points into AST buffer (not null-terminated)
     int func_name_len;
+    int label_count; // monotonically increasing label counter
 } codegen_t;
 
 void codegen_init(codegen_t *cg, FILE *out);

@@ -1,11 +1,4 @@
 int main()
 {
-    x = arr[i];
-    y = foo(a, b + 1);
-    z = bar();
-    f = obj.field;
-    g = p->data;
-    n++;
-    m--;
-    return 0;
+    return (6 * 7 == 42) ? 42 : 0;
 }

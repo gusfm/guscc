@@ -46,28 +46,48 @@ static int guscc_test_3(void)
 static int guscc_test_4(void)
 {
     int ret = run_test("../test/files/test_4.c");
+    if (ret != 0)
+        return ret;
+    ret = system("gcc ./test_4.s -o /tmp/guscc_test_4_out > /dev/null 2>&1");
     ASSERT(ret == 0);
+    ret = system("/tmp/guscc_test_4_out");
+    ASSERT(WEXITSTATUS(ret) == 42);
     return 0;
 }
 
 static int guscc_test_5(void)
 {
     int ret = run_test("../test/files/test_5.c");
+    if (ret != 0)
+        return ret;
+    ret = system("gcc ./test_5.s -o /tmp/guscc_test_5_out > /dev/null 2>&1");
     ASSERT(ret == 0);
+    ret = system("/tmp/guscc_test_5_out");
+    ASSERT(WEXITSTATUS(ret) == 42);
     return 0;
 }
 
 static int guscc_test_6(void)
 {
     int ret = run_test("../test/files/test_6.c");
+    if (ret != 0)
+        return ret;
+    ret = system("gcc ./test_6.s -o /tmp/guscc_test_6_out > /dev/null 2>&1");
     ASSERT(ret == 0);
+    ret = system("/tmp/guscc_test_6_out");
+    ASSERT(WEXITSTATUS(ret) == 42);
     return 0;
 }
 
 static int guscc_test_7(void)
 {
     int ret = run_test("../test/files/test_7.c");
+    if (ret != 0)
+        return ret;
+    ret = system("gcc ./test_7.s -o /tmp/guscc_test_7_out > /dev/null 2>&1");
     ASSERT(ret == 0);
+    ret = system("/tmp/guscc_test_7_out");
+    ASSERT(WEXITSTATUS(ret) == 42);
     return 0;
 }
 
