@@ -14,6 +14,20 @@ typedef enum {
     ND_RETURN_STMT, // return [expr] ;
     ND_EXPR_STMT,   // [expr] ;
     ND_NUM,         // Number literal
+    ND_IDENT,       // Identifier reference
+    ND_STR,         // String literal
+    ND_BINOP,       // Binary operator (left op right)
+    ND_UNOP,        // Prefix unary operator (op operand)
+    ND_POSTOP,      // Postfix ++ / --
+    ND_SUBSCRIPT,   // a[i]
+    ND_CALL,        // f(args...)
+    ND_MEMBER,      // a.b or a->b
+    ND_CAST,        // (type)expr
+    ND_SIZEOF_EXPR, // sizeof expr
+    ND_SIZEOF_TYPE, // sizeof(type_name)
+    ND_TERNARY,     // cond ? then : else
+    ND_ASSIGN,      // lvalue op= rvalue
+    ND_COMMA,       // expr , expr
 } node_kind_t;
 
 typedef struct node node_t;
@@ -36,6 +50,7 @@ struct node {
 
         struct {
             node_t *type_spec; // the type specifier node (e.g. int, char)
+            int pointer_level; // for abstract declarators (cast / sizeof)
         } decl_spec;           // used when kind == ND_DECL_SPEC
 
         struct {
@@ -76,6 +91,79 @@ struct node {
         struct {
             node_str_t val; // raw token string (not null-terminated)
         } num;              // used when kind == ND_NUM
+
+        struct {
+            node_str_t name; // identifier name (not null-terminated)
+        } ident;             // used when kind == ND_IDENT
+
+        struct {
+            node_str_t
+                val; // string value including quotes (not null-terminated)
+        } str;       // used when kind == ND_STR
+
+        struct {
+            int op; // token type of the operator
+            node_t *left;
+            node_t *right;
+        } binop; // used when kind == ND_BINOP
+
+        struct {
+            int op; // token type:
+                    // '&','*','+','-','~','!',TOKEN_INC_OP,TOKEN_DEC_OP
+            node_t *operand;
+        } unop; // used when kind == ND_UNOP
+
+        struct {
+            int op; // TOKEN_INC_OP or TOKEN_DEC_OP
+            node_t *operand;
+        } postop; // used when kind == ND_POSTOP
+
+        struct {
+            node_t *array;
+            node_t *index;
+        } subscript; // used when kind == ND_SUBSCRIPT
+
+        struct {
+            node_t *func; // callee expression
+            int nargs;
+            node_t *args[8]; // MAX_ARGS == 8
+        } call;              // used when kind == ND_CALL
+
+        struct {
+            node_t *object;   // struct/pointer expression
+            node_str_t field; // member name (not null-terminated)
+            int is_ptr;       // 0 for '.', 1 for '->'
+        } member;             // used when kind == ND_MEMBER
+
+        struct {
+            node_t *type_node; // ND_DECL_SPEC describing the target type
+            node_t *expr;
+        } cast; // used when kind == ND_CAST
+
+        struct {
+            node_t *expr;
+        } sizeof_expr; // used when kind == ND_SIZEOF_EXPR
+
+        struct {
+            node_t *type_node; // ND_DECL_SPEC describing the type
+        } sizeof_type;         // used when kind == ND_SIZEOF_TYPE
+
+        struct {
+            node_t *cond;
+            node_t *then_expr;
+            node_t *else_expr;
+        } ternary; // used when kind == ND_TERNARY
+
+        struct {
+            int op; // token type of the assignment operator
+            node_t *lhs;
+            node_t *rhs;
+        } assign; // used when kind == ND_ASSIGN
+
+        struct {
+            node_t *left;
+            node_t *right;
+        } comma; // used when kind == ND_COMMA
     };
 };
 

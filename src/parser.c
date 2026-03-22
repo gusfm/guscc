@@ -5,14 +5,20 @@
 
 #include "ast.h"
 
-// Foward declarations
+// Forward declarations
 node_t *parser_declarator(parser_t *p);
 node_t *parser_compound_statement(parser_t *p);
+node_t *parser_declaration_specifiers(parser_t *p);
+node_t *parser_expression(parser_t *p);
+node_t *parser_assignment_expression(parser_t *p);
+node_t *parser_cast_expression(parser_t *p);
+node_t *parser_unary_expression(parser_t *p);
 
 void parser_init(parser_t *p, char *buf, size_t size)
 {
     lex_init(&p->l, buf, size);
     p->next_token = NULL;
+    p->next_token2 = NULL;
 }
 
 void parser_finish(parser_t *p)
@@ -20,6 +26,10 @@ void parser_finish(parser_t *p)
     if (p->next_token) {
         token_destroy(p->next_token);
         p->next_token = NULL;
+    }
+    if (p->next_token2) {
+        token_destroy(p->next_token2);
+        p->next_token2 = NULL;
     }
 }
 
@@ -35,10 +45,19 @@ token_t *parser_next(parser_t *p)
 {
     if (p->next_token != NULL) {
         token_t *t = p->next_token;
-        p->next_token = NULL;
+        p->next_token = p->next_token2;
+        p->next_token2 = NULL;
         return t;
     }
     return lex_next(&p->l);
+}
+
+static token_t *parser_peek2(parser_t *p)
+{
+    parser_peek(p); // ensure next_token is loaded
+    if (p->next_token2 == NULL)
+        p->next_token2 = lex_next(&p->l);
+    return p->next_token2;
 }
 
 bool parser_accept(parser_t *p, token_type_t type)
@@ -203,16 +222,764 @@ node_t *parser_declarator(parser_t *p)
     return n;
 }
 
-node_t *parser_expression(parser_t *p)
+static bool parser_is_type_token(token_type_t type)
 {
-    token_t *tok = parser_expect_token(p, TOKEN_NUM);
+    return type == TOKEN_KW_INT || type == TOKEN_KW_CHAR ||
+           type == TOKEN_KW_VOID;
+}
+
+// Parse a type name for cast / sizeof: declaration_specifiers + optional '*'*
+static node_t *parser_type_name(parser_t *p)
+{
+    node_t *decl_spec = parser_declaration_specifiers(p);
+    if (decl_spec == NULL)
+        return NULL;
+    int pointer_level = 0;
+    while (parser_accept(p, '*'))
+        pointer_level++;
+    decl_spec->decl_spec.pointer_level = pointer_level;
+    return decl_spec;
+}
+
+/*
+ * primary_expression
+ * : IDENTIFIER
+ * | CONSTANT
+ * | STRING_LITERAL
+ * | '(' expression ')'
+ * ;
+ */
+node_t *parser_primary_expression(parser_t *p)
+{
+    token_t *tok = parser_peek(p);
     if (tok == NULL)
         return NULL;
-    node_t *n = node_create(ND_NUM, tok->line, tok->col);
-    n->num.val.str = tok->sval;
-    n->num.val.len = tok->len;
-    token_destroy(tok);
+
+    if (tok->type == TOKEN_IDENT) {
+        tok = parser_next(p);
+        node_t *n = node_create(ND_IDENT, tok->line, tok->col);
+        n->ident.name.str = tok->sval;
+        n->ident.name.len = tok->len;
+        token_destroy(tok);
+        return n;
+    }
+    if (tok->type == TOKEN_NUM) {
+        tok = parser_next(p);
+        node_t *n = node_create(ND_NUM, tok->line, tok->col);
+        n->num.val.str = tok->sval;
+        n->num.val.len = tok->len;
+        token_destroy(tok);
+        return n;
+    }
+    if (tok->type == TOKEN_STR) {
+        tok = parser_next(p);
+        node_t *n = node_create(ND_STR, tok->line, tok->col);
+        n->str.val.str = tok->sval;
+        n->str.val.len = tok->len;
+        token_destroy(tok);
+        return n;
+    }
+    if (tok->type == '(') {
+        parser_next(p); // consume '('
+        node_t *inner = parser_expression(p);
+        if (inner == NULL)
+            return NULL;
+        if (!parser_expect(p, ')')) {
+            node_destroy(inner);
+            return NULL;
+        }
+        return inner;
+    }
+    fprintf(stderr, "Expected expression but received '%.*s'\n", tok->len,
+            tok->sval);
+    return NULL;
+}
+
+/*
+ * postfix_expression
+ * : primary_expression
+ * | postfix_expression '[' expression ']'
+ * | postfix_expression '(' ')'
+ * | postfix_expression '(' argument_expression_list ')'
+ * | postfix_expression '.' IDENTIFIER
+ * | postfix_expression PTR_OP IDENTIFIER
+ * | postfix_expression INC_OP
+ * | postfix_expression DEC_OP
+ * ;
+ */
+node_t *parser_postfix_expression(parser_t *p)
+{
+    node_t *node = parser_primary_expression(p);
+    if (node == NULL)
+        return NULL;
+
+    while (1) {
+        token_t *peek = parser_peek(p);
+        if (peek == NULL)
+            break;
+
+        if (peek->type == '[') {
+            token_t *op_tok = parser_next(p);
+            int line = op_tok->line, col = op_tok->col;
+            token_destroy(op_tok);
+            node_t *index = parser_expression(p);
+            if (index == NULL) {
+                node_destroy(node);
+                return NULL;
+            }
+            if (!parser_expect(p, ']')) {
+                node_destroy(index);
+                node_destroy(node);
+                return NULL;
+            }
+            node_t *sub = node_create(ND_SUBSCRIPT, line, col);
+            sub->subscript.array = node;
+            sub->subscript.index = index;
+            node = sub;
+
+        } else if (peek->type == '(') {
+            token_t *op_tok = parser_next(p);
+            int line = op_tok->line, col = op_tok->col;
+            token_destroy(op_tok);
+            node_t *call = node_create(ND_CALL, line, col);
+            call->call.func = node;
+            call->call.nargs = 0;
+            if (!parser_accept(p, ')')) {
+                // Parse argument list
+                node_t *arg = parser_assignment_expression(p);
+                if (arg == NULL) {
+                    node_destroy(call);
+                    return NULL;
+                }
+                call->call.args[call->call.nargs++] = arg;
+                while (parser_accept(p, ',')) {
+                    arg = parser_assignment_expression(p);
+                    if (arg == NULL) {
+                        node_destroy(call);
+                        return NULL;
+                    }
+                    if (call->call.nargs < 8)
+                        call->call.args[call->call.nargs++] = arg;
+                }
+                if (!parser_expect(p, ')')) {
+                    node_destroy(call);
+                    return NULL;
+                }
+            }
+            node = call;
+
+        } else if (peek->type == '.') {
+            token_t *op_tok = parser_next(p);
+            int line = op_tok->line, col = op_tok->col;
+            token_destroy(op_tok);
+            token_t *field = parser_expect_token(p, TOKEN_IDENT);
+            if (field == NULL) {
+                node_destroy(node);
+                return NULL;
+            }
+            node_t *mem = node_create(ND_MEMBER, line, col);
+            mem->member.object = node;
+            mem->member.field.str = field->sval;
+            mem->member.field.len = field->len;
+            mem->member.is_ptr = 0;
+            token_destroy(field);
+            node = mem;
+
+        } else if (peek->type == TOKEN_PTR_OP) {
+            token_t *op_tok = parser_next(p);
+            int line = op_tok->line, col = op_tok->col;
+            token_destroy(op_tok);
+            token_t *field = parser_expect_token(p, TOKEN_IDENT);
+            if (field == NULL) {
+                node_destroy(node);
+                return NULL;
+            }
+            node_t *mem = node_create(ND_MEMBER, line, col);
+            mem->member.object = node;
+            mem->member.field.str = field->sval;
+            mem->member.field.len = field->len;
+            mem->member.is_ptr = 1;
+            token_destroy(field);
+            node = mem;
+
+        } else if (peek->type == TOKEN_INC_OP || peek->type == TOKEN_DEC_OP) {
+            token_t *op_tok = parser_next(p);
+            node_t *post = node_create(ND_POSTOP, op_tok->line, op_tok->col);
+            post->postop.op = op_tok->type;
+            post->postop.operand = node;
+            token_destroy(op_tok);
+            node = post;
+
+        } else {
+            break;
+        }
+    }
+    return node;
+}
+
+/*
+ * unary_operator : '&' | '*' | '+' | '-' | '~' | '!'
+ * unary_expression
+ * : postfix_expression
+ * | INC_OP unary_expression
+ * | DEC_OP unary_expression
+ * | unary_operator cast_expression
+ * | SIZEOF unary_expression
+ * | SIZEOF '(' type_name ')'
+ * ;
+ */
+node_t *parser_unary_expression(parser_t *p)
+{
+    token_t *peek = parser_peek(p);
+    if (peek == NULL)
+        return NULL;
+
+    if (peek->type == TOKEN_INC_OP || peek->type == TOKEN_DEC_OP) {
+        token_t *op_tok = parser_next(p);
+        node_t *operand = parser_unary_expression(p);
+        if (operand == NULL) {
+            token_destroy(op_tok);
+            return NULL;
+        }
+        node_t *n = node_create(ND_UNOP, op_tok->line, op_tok->col);
+        n->unop.op = op_tok->type;
+        n->unop.operand = operand;
+        token_destroy(op_tok);
+        return n;
+    }
+
+    if (peek->type == '&' || peek->type == '*' || peek->type == '+' ||
+        peek->type == '-' || peek->type == '~' || peek->type == '!') {
+        token_t *op_tok = parser_next(p);
+        node_t *operand = parser_cast_expression(p);
+        if (operand == NULL) {
+            token_destroy(op_tok);
+            return NULL;
+        }
+        node_t *n = node_create(ND_UNOP, op_tok->line, op_tok->col);
+        n->unop.op = op_tok->type;
+        n->unop.operand = operand;
+        token_destroy(op_tok);
+        return n;
+    }
+
+    if (peek->type == TOKEN_KW_SIZEOF) {
+        token_t *kw = parser_next(p);
+        int line = kw->line, col = kw->col;
+        token_destroy(kw);
+        // Check for sizeof '(' type_name ')'
+        token_t *p1 = parser_peek(p);
+        if (p1 != NULL && p1->type == '(') {
+            token_t *p2 = parser_peek2(p);
+            if (p2 != NULL && parser_is_type_token(p2->type)) {
+                parser_next(p); // consume '('
+                node_t *type_node = parser_type_name(p);
+                if (type_node == NULL)
+                    return NULL;
+                if (!parser_expect(p, ')')) {
+                    node_destroy(type_node);
+                    return NULL;
+                }
+                node_t *n = node_create(ND_SIZEOF_TYPE, line, col);
+                n->sizeof_type.type_node = type_node;
+                return n;
+            }
+        }
+        node_t *operand = parser_unary_expression(p);
+        if (operand == NULL)
+            return NULL;
+        node_t *n = node_create(ND_SIZEOF_EXPR, line, col);
+        n->sizeof_expr.expr = operand;
+        return n;
+    }
+
+    return parser_postfix_expression(p);
+}
+
+/*
+ * cast_expression
+ * : unary_expression
+ * | '(' type_name ')' cast_expression
+ * ;
+ */
+node_t *parser_cast_expression(parser_t *p)
+{
+    token_t *p1 = parser_peek(p);
+    if (p1 != NULL && p1->type == '(') {
+        token_t *p2 = parser_peek2(p);
+        if (p2 != NULL && parser_is_type_token(p2->type)) {
+            token_t *lp = parser_next(p); // consume '('
+            int line = lp->line, col = lp->col;
+            token_destroy(lp);
+            node_t *type_node = parser_type_name(p);
+            if (type_node == NULL)
+                return NULL;
+            if (!parser_expect(p, ')')) {
+                node_destroy(type_node);
+                return NULL;
+            }
+            node_t *expr = parser_cast_expression(p);
+            if (expr == NULL) {
+                node_destroy(type_node);
+                return NULL;
+            }
+            node_t *n = node_create(ND_CAST, line, col);
+            n->cast.type_node = type_node;
+            n->cast.expr = expr;
+            return n;
+        }
+    }
+    return parser_unary_expression(p);
+}
+
+/*
+ * multiplicative_expression
+ * : cast_expression
+ * | multiplicative_expression '*' cast_expression
+ * | multiplicative_expression '/' cast_expression
+ * | multiplicative_expression '%' cast_expression
+ * ;
+ */
+node_t *parser_multiplicative_expression(parser_t *p)
+{
+    node_t *node = parser_cast_expression(p);
+    if (node == NULL)
+        return NULL;
+    while (1) {
+        token_t *peek = parser_peek(p);
+        if (peek == NULL)
+            break;
+        if (peek->type != '*' && peek->type != '/' && peek->type != '%')
+            break;
+        token_t *op_tok = parser_next(p);
+        int op = op_tok->type, line = op_tok->line, col = op_tok->col;
+        token_destroy(op_tok);
+        node_t *right = parser_cast_expression(p);
+        if (right == NULL) {
+            node_destroy(node);
+            return NULL;
+        }
+        node_t *binop = node_create(ND_BINOP, line, col);
+        binop->binop.op = op;
+        binop->binop.left = node;
+        binop->binop.right = right;
+        node = binop;
+    }
+    return node;
+}
+
+/*
+ * additive_expression
+ * : multiplicative_expression
+ * | additive_expression '+' multiplicative_expression
+ * | additive_expression '-' multiplicative_expression
+ * ;
+ */
+node_t *parser_additive_expression(parser_t *p)
+{
+    node_t *node = parser_multiplicative_expression(p);
+    if (node == NULL)
+        return NULL;
+    while (1) {
+        token_t *peek = parser_peek(p);
+        if (peek == NULL)
+            break;
+        if (peek->type != '+' && peek->type != '-')
+            break;
+        token_t *op_tok = parser_next(p);
+        int op = op_tok->type, line = op_tok->line, col = op_tok->col;
+        token_destroy(op_tok);
+        node_t *right = parser_multiplicative_expression(p);
+        if (right == NULL) {
+            node_destroy(node);
+            return NULL;
+        }
+        node_t *binop = node_create(ND_BINOP, line, col);
+        binop->binop.op = op;
+        binop->binop.left = node;
+        binop->binop.right = right;
+        node = binop;
+    }
+    return node;
+}
+
+/*
+ * shift_expression
+ * : additive_expression
+ * | shift_expression LEFT_OP additive_expression
+ * | shift_expression RIGHT_OP additive_expression
+ * ;
+ */
+node_t *parser_shift_expression(parser_t *p)
+{
+    node_t *node = parser_additive_expression(p);
+    if (node == NULL)
+        return NULL;
+    while (1) {
+        token_t *peek = parser_peek(p);
+        if (peek == NULL)
+            break;
+        if (peek->type != TOKEN_LEFT_OP && peek->type != TOKEN_RIGHT_OP)
+            break;
+        token_t *op_tok = parser_next(p);
+        int op = op_tok->type, line = op_tok->line, col = op_tok->col;
+        token_destroy(op_tok);
+        node_t *right = parser_additive_expression(p);
+        if (right == NULL) {
+            node_destroy(node);
+            return NULL;
+        }
+        node_t *binop = node_create(ND_BINOP, line, col);
+        binop->binop.op = op;
+        binop->binop.left = node;
+        binop->binop.right = right;
+        node = binop;
+    }
+    return node;
+}
+
+/*
+ * relational_expression
+ * : shift_expression
+ * | relational_expression '<' shift_expression
+ * | relational_expression '>' shift_expression
+ * | relational_expression LE_OP shift_expression
+ * | relational_expression GE_OP shift_expression
+ * ;
+ */
+node_t *parser_relational_expression(parser_t *p)
+{
+    node_t *node = parser_shift_expression(p);
+    if (node == NULL)
+        return NULL;
+    while (1) {
+        token_t *peek = parser_peek(p);
+        if (peek == NULL)
+            break;
+        if (peek->type != '<' && peek->type != '>' &&
+            peek->type != TOKEN_LE_OP && peek->type != TOKEN_GE_OP)
+            break;
+        token_t *op_tok = parser_next(p);
+        int op = op_tok->type, line = op_tok->line, col = op_tok->col;
+        token_destroy(op_tok);
+        node_t *right = parser_shift_expression(p);
+        if (right == NULL) {
+            node_destroy(node);
+            return NULL;
+        }
+        node_t *binop = node_create(ND_BINOP, line, col);
+        binop->binop.op = op;
+        binop->binop.left = node;
+        binop->binop.right = right;
+        node = binop;
+    }
+    return node;
+}
+
+/*
+ * equality_expression
+ * : relational_expression
+ * | equality_expression EQ_OP relational_expression
+ * | equality_expression NE_OP relational_expression
+ * ;
+ */
+node_t *parser_equality_expression(parser_t *p)
+{
+    node_t *node = parser_relational_expression(p);
+    if (node == NULL)
+        return NULL;
+    while (1) {
+        token_t *peek = parser_peek(p);
+        if (peek == NULL)
+            break;
+        if (peek->type != TOKEN_EQ_OP && peek->type != TOKEN_NE_OP)
+            break;
+        token_t *op_tok = parser_next(p);
+        int op = op_tok->type, line = op_tok->line, col = op_tok->col;
+        token_destroy(op_tok);
+        node_t *right = parser_relational_expression(p);
+        if (right == NULL) {
+            node_destroy(node);
+            return NULL;
+        }
+        node_t *binop = node_create(ND_BINOP, line, col);
+        binop->binop.op = op;
+        binop->binop.left = node;
+        binop->binop.right = right;
+        node = binop;
+    }
+    return node;
+}
+
+/*
+ * and_expression
+ * : equality_expression
+ * | and_expression '&' equality_expression
+ * ;
+ */
+node_t *parser_and_expression(parser_t *p)
+{
+    node_t *node = parser_equality_expression(p);
+    if (node == NULL)
+        return NULL;
+    while (1) {
+        token_t *peek = parser_peek(p);
+        if (peek == NULL || peek->type != '&')
+            break;
+        token_t *op_tok = parser_next(p);
+        int op = op_tok->type, line = op_tok->line, col = op_tok->col;
+        token_destroy(op_tok);
+        node_t *right = parser_equality_expression(p);
+        if (right == NULL) {
+            node_destroy(node);
+            return NULL;
+        }
+        node_t *binop = node_create(ND_BINOP, line, col);
+        binop->binop.op = op;
+        binop->binop.left = node;
+        binop->binop.right = right;
+        node = binop;
+    }
+    return node;
+}
+
+/*
+ * exclusive_or_expression
+ * : and_expression
+ * | exclusive_or_expression '^' and_expression
+ * ;
+ */
+node_t *parser_exclusive_or_expression(parser_t *p)
+{
+    node_t *node = parser_and_expression(p);
+    if (node == NULL)
+        return NULL;
+    while (1) {
+        token_t *peek = parser_peek(p);
+        if (peek == NULL || peek->type != '^')
+            break;
+        token_t *op_tok = parser_next(p);
+        int op = op_tok->type, line = op_tok->line, col = op_tok->col;
+        token_destroy(op_tok);
+        node_t *right = parser_and_expression(p);
+        if (right == NULL) {
+            node_destroy(node);
+            return NULL;
+        }
+        node_t *binop = node_create(ND_BINOP, line, col);
+        binop->binop.op = op;
+        binop->binop.left = node;
+        binop->binop.right = right;
+        node = binop;
+    }
+    return node;
+}
+
+/*
+ * inclusive_or_expression
+ * : exclusive_or_expression
+ * | inclusive_or_expression '|' exclusive_or_expression
+ * ;
+ */
+node_t *parser_inclusive_or_expression(parser_t *p)
+{
+    node_t *node = parser_exclusive_or_expression(p);
+    if (node == NULL)
+        return NULL;
+    while (1) {
+        token_t *peek = parser_peek(p);
+        if (peek == NULL || peek->type != '|')
+            break;
+        token_t *op_tok = parser_next(p);
+        int op = op_tok->type, line = op_tok->line, col = op_tok->col;
+        token_destroy(op_tok);
+        node_t *right = parser_exclusive_or_expression(p);
+        if (right == NULL) {
+            node_destroy(node);
+            return NULL;
+        }
+        node_t *binop = node_create(ND_BINOP, line, col);
+        binop->binop.op = op;
+        binop->binop.left = node;
+        binop->binop.right = right;
+        node = binop;
+    }
+    return node;
+}
+
+/*
+ * logical_and_expression
+ * : inclusive_or_expression
+ * | logical_and_expression AND_OP inclusive_or_expression
+ * ;
+ */
+node_t *parser_logical_and_expression(parser_t *p)
+{
+    node_t *node = parser_inclusive_or_expression(p);
+    if (node == NULL)
+        return NULL;
+    while (1) {
+        token_t *peek = parser_peek(p);
+        if (peek == NULL || peek->type != TOKEN_AND_OP)
+            break;
+        token_t *op_tok = parser_next(p);
+        int op = op_tok->type, line = op_tok->line, col = op_tok->col;
+        token_destroy(op_tok);
+        node_t *right = parser_inclusive_or_expression(p);
+        if (right == NULL) {
+            node_destroy(node);
+            return NULL;
+        }
+        node_t *binop = node_create(ND_BINOP, line, col);
+        binop->binop.op = op;
+        binop->binop.left = node;
+        binop->binop.right = right;
+        node = binop;
+    }
+    return node;
+}
+
+/*
+ * logical_or_expression
+ * : logical_and_expression
+ * | logical_or_expression OR_OP logical_and_expression
+ * ;
+ */
+node_t *parser_logical_or_expression(parser_t *p)
+{
+    node_t *node = parser_logical_and_expression(p);
+    if (node == NULL)
+        return NULL;
+    while (1) {
+        token_t *peek = parser_peek(p);
+        if (peek == NULL || peek->type != TOKEN_OR_OP)
+            break;
+        token_t *op_tok = parser_next(p);
+        int op = op_tok->type, line = op_tok->line, col = op_tok->col;
+        token_destroy(op_tok);
+        node_t *right = parser_logical_and_expression(p);
+        if (right == NULL) {
+            node_destroy(node);
+            return NULL;
+        }
+        node_t *binop = node_create(ND_BINOP, line, col);
+        binop->binop.op = op;
+        binop->binop.left = node;
+        binop->binop.right = right;
+        node = binop;
+    }
+    return node;
+}
+
+/*
+ * conditional_expression
+ * : logical_or_expression
+ * | logical_or_expression '?' expression ':' conditional_expression
+ * ;
+ */
+node_t *parser_conditional_expression(parser_t *p)
+{
+    node_t *cond = parser_logical_or_expression(p);
+    if (cond == NULL)
+        return NULL;
+    token_t *peek = parser_peek(p);
+    if (peek == NULL || peek->type != '?')
+        return cond;
+    token_t *op_tok = parser_next(p); // consume '?'
+    int line = op_tok->line, col = op_tok->col;
+    token_destroy(op_tok);
+    node_t *then_expr = parser_expression(p);
+    if (then_expr == NULL) {
+        node_destroy(cond);
+        return NULL;
+    }
+    if (!parser_expect(p, ':')) {
+        node_destroy(cond);
+        node_destroy(then_expr);
+        return NULL;
+    }
+    node_t *else_expr = parser_conditional_expression(p);
+    if (else_expr == NULL) {
+        node_destroy(cond);
+        node_destroy(then_expr);
+        return NULL;
+    }
+    node_t *n = node_create(ND_TERNARY, line, col);
+    n->ternary.cond = cond;
+    n->ternary.then_expr = then_expr;
+    n->ternary.else_expr = else_expr;
     return n;
+}
+
+static bool parser_is_assign_op(token_type_t type)
+{
+    return type == '=' || type == TOKEN_MUL_ASSIGN ||
+           type == TOKEN_DIV_ASSIGN || type == TOKEN_MOD_ASSIGN ||
+           type == TOKEN_ADD_ASSIGN || type == TOKEN_SUB_ASSIGN ||
+           type == TOKEN_LEFT_ASSIGN || type == TOKEN_RIGHT_ASSIGN ||
+           type == TOKEN_AND_ASSIGN || type == TOKEN_XOR_ASSIGN ||
+           type == TOKEN_OR_ASSIGN;
+}
+
+/*
+ * assignment_operator: '=' | MUL_ASSIGN | ... | OR_ASSIGN
+ * assignment_expression
+ * : conditional_expression
+ * | unary_expression assignment_operator assignment_expression
+ * ;
+ */
+node_t *parser_assignment_expression(parser_t *p)
+{
+    node_t *lhs = parser_conditional_expression(p);
+    if (lhs == NULL)
+        return NULL;
+    token_t *peek = parser_peek(p);
+    if (peek == NULL || !parser_is_assign_op(peek->type))
+        return lhs;
+    token_t *op_tok = parser_next(p);
+    int op = op_tok->type, line = op_tok->line, col = op_tok->col;
+    token_destroy(op_tok);
+    node_t *rhs = parser_assignment_expression(p); // right-recursive
+    if (rhs == NULL) {
+        node_destroy(lhs);
+        return NULL;
+    }
+    node_t *n = node_create(ND_ASSIGN, line, col);
+    n->assign.op = op;
+    n->assign.lhs = lhs;
+    n->assign.rhs = rhs;
+    return n;
+}
+
+/*
+ * expression
+ * : assignment_expression
+ * | expression ',' assignment_expression
+ * ;
+ */
+node_t *parser_expression(parser_t *p)
+{
+    node_t *node = parser_assignment_expression(p);
+    if (node == NULL)
+        return NULL;
+    while (1) {
+        token_t *peek = parser_peek(p);
+        if (peek == NULL || peek->type != ',')
+            break;
+        token_t *op_tok = parser_next(p);
+        int line = op_tok->line, col = op_tok->col;
+        token_destroy(op_tok);
+        node_t *right = parser_assignment_expression(p);
+        if (right == NULL) {
+            node_destroy(node);
+            return NULL;
+        }
+        node_t *comma = node_create(ND_COMMA, line, col);
+        comma->comma.left = node;
+        comma->comma.right = right;
+        node = comma;
+    }
+    return node;
 }
 
 node_t *parser_expression_statement(parser_t *p)

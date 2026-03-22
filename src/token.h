@@ -4,15 +4,37 @@
 #include <stddef.h>
 
 typedef enum {
-    TOKEN_IDENT = 0x100,
-    TOKEN_NUM,
-    TOKEN_STR,
-    TOKEN_KW_CHAR,
-    TOKEN_KW_IF,
-    TOKEN_KW_INT,
-    TOKEN_KW_RETURN,
-    TOKEN_KW_VOID,
-    TOKEN_KW_WHILE,
+    TOKEN_IDENT = 0x100, // identifier
+    TOKEN_NUM,           // constant number
+    TOKEN_STR,           // string literal
+    TOKEN_KW_CHAR,       // char keyword
+    TOKEN_KW_IF,         // if keyword
+    TOKEN_KW_INT,        // int keyword
+    TOKEN_KW_RETURN,     // return keyword
+    TOKEN_KW_VOID,       // void keyword
+    TOKEN_KW_WHILE,      // while keyword
+    TOKEN_KW_SIZEOF,     // sizeof keyword
+    TOKEN_INC_OP,        // ++
+    TOKEN_DEC_OP,        // --
+    TOKEN_PTR_OP,        // ->
+    TOKEN_LEFT_OP,       // <<
+    TOKEN_RIGHT_OP,      // >>
+    TOKEN_LE_OP,         // <=
+    TOKEN_GE_OP,         // >=
+    TOKEN_EQ_OP,         // ==
+    TOKEN_NE_OP,         // !=
+    TOKEN_AND_OP,        // &&
+    TOKEN_OR_OP,         // ||
+    TOKEN_MUL_ASSIGN,    // *=
+    TOKEN_DIV_ASSIGN,    // /=
+    TOKEN_MOD_ASSIGN,    // %=
+    TOKEN_ADD_ASSIGN,    // +=
+    TOKEN_SUB_ASSIGN,    // -=
+    TOKEN_LEFT_ASSIGN,   // <<=
+    TOKEN_RIGHT_ASSIGN,  // >>=
+    TOKEN_AND_ASSIGN,    // &=
+    TOKEN_XOR_ASSIGN,    // ^=
+    TOKEN_OR_ASSIGN,     // |=
     TOKEN_EOF
 } token_type_t;
 
