@@ -34,7 +34,7 @@ static int codegen_test_1(void)
     int ret = run_test("../test/files/test_1.c");
     if (ret != 0)
         return ret;
-    ret = system("gcc ../test/files/test_1.s -o /tmp/guscc_test_1_out > /dev/null 2>&1");
+    ret = system("gcc ./test_1.s -o /tmp/guscc_test_1_out > /dev/null 2>&1");
     ASSERT(ret == 0);
     ret = system("/tmp/guscc_test_1_out");
     ASSERT(WEXITSTATUS(ret) == 42);

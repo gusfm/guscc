@@ -27,7 +27,7 @@ The binary is placed at `build/guscc`.
 ./build/guscc test/files/test_1.c
 ```
 
-This prints the debug sections to stdout and writes the assembly to `test/files/test_1.s`. The generated `.s` file can be assembled and linked with gcc:
+This prints the debug sections to stdout and writes the assembly to `test_1.s` in the current directory. The generated `.s` file can be assembled and linked with gcc:
 
 ```bash
 gcc test/files/test_1.s -o test_1

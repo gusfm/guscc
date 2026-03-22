@@ -128,7 +128,9 @@ int main(int argc, char **argv)
     lexer(buf, size);
 
     char outpath[512];
-    strncpy(outpath, argv[1], sizeof(outpath) - 1);
+    const char *base = strrchr(argv[1], '/');
+    base = base ? base + 1 : argv[1];
+    strncpy(outpath, base, sizeof(outpath) - 1);
     outpath[sizeof(outpath) - 1] = '\0';
     size_t inlen = strlen(outpath);
     if (inlen >= 2 && outpath[inlen - 2] == '.' && outpath[inlen - 1] == 'c')
