@@ -1,6 +1,6 @@
 # guscc
 
-A simple recursive-descent C compiler written in C99, aimed at eventual self-hosting. It supports a limited subset of C: `void`/`char`/`int` types, functions, `if`, `while`, and `return`.
+A simple recursive-descent C compiler written in C99, aimed at eventual self-hosting. It supports a limited subset of C: `void`/`char`/`int` types, functions, `return`, and the full ANSI C expression syntax.
 
 Given a C source file, `guscc` compiles it to x86-64 assembly (`.s`) and prints three debug sections to stdout:
 1. The source with line numbers
@@ -27,10 +27,10 @@ The binary is placed at `build/guscc`.
 ./build/guscc test/files/test_1.c
 ```
 
-This prints the debug sections to stdout and writes the assembly to `test_1.s` in the current directory. The generated `.s` file can be assembled and linked with gcc:
+This prints the debug sections to stdout and writes the assembly to `test_1.s` in the **current directory**. The generated `.s` file can be assembled and linked with gcc:
 
 ```bash
-gcc test/files/test_1.s -o test_1
+gcc test_1.s -o test_1
 ./test_1; echo $?
 ```
 
@@ -42,7 +42,7 @@ cmake --build build && ctest
 ./build/guscc_test
 ```
 
-Tests live in `test/` and use a custom framework (`test/ut.h`). There are 3 lexer unit tests and 4 compiler/codegen tests, including one end-to-end test that assembles the generated assembly, runs it, and verifies the exit code.
+Tests live in `test/` and use a custom framework (`test/ut.h`). Lexer unit tests tokenize C snippets and assert token types and values. End-to-end compiler tests compile test files, assemble the output, run the resulting binary, and verify the exit code.
 
 ## Architecture
 
@@ -60,4 +60,4 @@ Pipeline: **source → lexer → parser → AST → codegen → x86-64 assembly*
 ## Current limitations
 
 - `if` and `while` statement parsing are not yet implemented (stubbed)
-- Expression parsing only handles integer literals
+- Identifier references, assignment, postfix `++`/`--`, array subscript, function calls, and struct member access are parsed but not yet implemented in codegen (require a symbol table and stack frame management)
