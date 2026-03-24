@@ -1257,7 +1257,6 @@ node_t *parser_translation_unit(parser_t *p)
         node_destroy(tu);
         return NULL;
     }
-    ast_print(tu, 0);
     return tu;
 }
 

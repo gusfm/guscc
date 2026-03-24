@@ -2,10 +2,7 @@
 
 A simple recursive-descent C compiler written in C99, aimed at eventual self-hosting. It supports a limited subset of C: `void`/`char`/`int` types, multiple functions per file, local variables, parameters, assignments, function calls, `return`, and the full ANSI C expression syntax.
 
-Given a C source file, `guscc` compiles it to x86-64 assembly (`.s`) and prints three debug sections to stdout:
-1. The source with line numbers
-2. The token stream produced by the lexer
-3. The AST produced by the parser
+Given a C source file, `guscc` compiles it to x86-64 assembly (`.s`). By default only errors are printed to stderr. Pass `-d` to also print three debug sections to stdout: source with line numbers, the lexer token stream, and the parser AST.
 
 ## Requirements
 
@@ -24,10 +21,14 @@ The binary is placed at `build/guscc`.
 ## Usage
 
 ```bash
+# Compile silently (only errors to stderr)
 ./build/guscc test/files/test_11.c
+
+# Compile with debug output (source, tokens, AST printed to stdout)
+./build/guscc -d test/files/test_11.c
 ```
 
-This prints the debug sections to stdout and writes the assembly to `test_11.s` in the **current directory**. The generated `.s` file can be assembled and linked with gcc:
+Both write the assembly to `test_11.s` in the **current directory**. The generated `.s` file can be assembled and linked with gcc:
 
 ```bash
 gcc test_11.s -o test_11

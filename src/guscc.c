@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ast.h"
 #include "codegen.h"
 #include "lex.h"
 #include "parser.h"
@@ -109,27 +110,42 @@ void debug_file(char *buf)
 
 int main(int argc, char **argv)
 {
-    if (argc < 2) {
-        fprintf(stderr, "error: syntax: guscc <file.c>\n");
+    int debug = 0;
+    const char *filename = NULL;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-d") == 0)
+            debug = 1;
+        else if (filename == NULL)
+            filename = argv[i];
+        else {
+            fprintf(stderr, "error: unexpected argument '%s'\n", argv[i]);
+            return -1;
+        }
+    }
+
+    if (filename == NULL) {
+        fprintf(stderr, "error: syntax: guscc [-d] <file.c>\n");
         return -1;
     }
 
     long size;
-    char *buf = load_file_to_string(argv[1], &size);
+    char *buf = load_file_to_string(filename, &size);
     if (buf == NULL) {
-        fprintf(stderr, "error: could not open %s\n", argv[1]);
+        fprintf(stderr, "error: could not open %s\n", filename);
         return -1;
     }
 
-    printf("File debug output:\n");
-    debug_file(buf);
-
-    printf("\nLexer debug output:\n");
-    lexer(buf, size);
+    if (debug) {
+        printf("File debug output:\n");
+        debug_file(buf);
+        printf("\nLexer debug output:\n");
+        lexer(buf, size);
+    }
 
     char outpath[512];
-    const char *base = strrchr(argv[1], '/');
-    base = base ? base + 1 : argv[1];
+    const char *base = strrchr(filename, '/');
+    base = base ? base + 1 : filename;
     strncpy(outpath, base, sizeof(outpath) - 1);
     outpath[sizeof(outpath) - 1] = '\0';
     size_t inlen = strlen(outpath);
@@ -138,8 +154,11 @@ int main(int argc, char **argv)
     else
         strncat(outpath, ".s", sizeof(outpath) - inlen - 1);
 
-    printf("\nParser debug output:\n");
     node_t *ast = parser(buf, size);
+    if (debug && ast != NULL) {
+        printf("\nParser debug output:\n");
+        ast_print(ast, 0);
+    }
     if (ast == NULL) {
         free(buf);
         return -1;
