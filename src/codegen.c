@@ -42,6 +42,7 @@ void codegen_init(codegen_t *cg, FILE *out)
     cg->func_name = NULL;
     cg->func_name_len = 0;
     cg->label_count = 0;
+    cg->errors = 0;
 }
 
 void codegen_finish(codegen_t *cg)
@@ -319,8 +320,9 @@ static void cg_lvalue_addr(codegen_t *cg, node_t *n)
 {
     if (n->kind == ND_IDENT) {
         if (n->ident.sym == NULL) {
-            fprintf(stderr, "codegen: lvalue address of undeclared '%.*s'\n",
+            fprintf(stderr, "error: use of undeclared identifier '%.*s'\n",
                     n->ident.name.len, n->ident.name.str);
+            cg->errors++;
             return;
         }
         fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", n->ident.sym->offset);
@@ -337,8 +339,9 @@ static void cg_load_lvalue(codegen_t *cg, node_t *n)
 {
     if (n->kind == ND_IDENT) {
         if (n->ident.sym == NULL) {
-            fprintf(stderr, "codegen: read of undeclared '%.*s'\n",
+            fprintf(stderr, "error: use of undeclared identifier '%.*s'\n",
                     n->ident.name.len, n->ident.name.str);
+            cg->errors++;
             fprintf(cg->out, "\txorl\t%%eax, %%eax\n");
             return;
         }
@@ -356,8 +359,9 @@ static void cg_store_to_lvalue(codegen_t *cg, node_t *lhs)
 {
     if (lhs->kind == ND_IDENT) {
         if (lhs->ident.sym == NULL) {
-            fprintf(stderr, "codegen: write to undeclared '%.*s'\n",
+            fprintf(stderr, "error: use of undeclared identifier '%.*s'\n",
                     lhs->ident.name.len, lhs->ident.name.str);
+            cg->errors++;
             return;
         }
         cg_store_sym(cg, lhs->ident.sym);
@@ -403,8 +407,9 @@ static int compound_base_op(int op)
 static void cg_ident(codegen_t *cg, node_t *n)
 {
     if (n->ident.sym == NULL) {
-        fprintf(stderr, "codegen: reference to undeclared '%.*s'\n",
+        fprintf(stderr, "error: use of undeclared identifier '%.*s'\n",
                 n->ident.name.len, n->ident.name.str);
+        cg->errors++;
         fprintf(cg->out, "\txorl\t%%eax, %%eax\n");
         return;
     }
@@ -671,5 +676,5 @@ int codegen_exec(codegen_t *cg, node_t *root)
     if (root == NULL)
         return -1;
     cg_node(cg, root);
-    return 0;
+    return cg->errors > 0 ? -1 : 0;
 }

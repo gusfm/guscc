@@ -156,6 +156,14 @@ static int guscc_test_fail_2(void)
     return 0;
 }
 
+/* test_fail_3: undefined variable */
+static int guscc_test_fail_3(void)
+{
+    int ret = run_test("../test/files/test_fail_3.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -186,4 +194,5 @@ void guscc_test(void)
     /* Failure paths */
     ut_run(guscc_test_fail_1);
     ut_run(guscc_test_fail_2);
+    ut_run(guscc_test_fail_3);
 }
