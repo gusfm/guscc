@@ -3,12 +3,16 @@
 
 #include "token.h"
 
+/* Forward declaration — sym.h includes ast.h, so we forward-declare here */
+typedef struct sym sym_t;
+
 typedef enum {
-    ND_FUNC,        // Function definition
-    ND_DECL_SPEC,   // Declaration specifiers (e.g. int, char)
-    ND_TYPE_SPEC,   // Type specifier leaf (void / char / int)
-    ND_PARAM_DECL,  // Single parameter declaration
-    ND_PARAM_LIST,  // Comma-separated parameter list
+    ND_TRANSLATION_UNIT, // Top-level list of function definitions
+    ND_FUNC,             // Function definition
+    ND_DECL_SPEC,        // Declaration specifiers (e.g. int, char)
+    ND_TYPE_SPEC,        // Type specifier leaf (void / char / int)
+    ND_PARAM_DECL,       // Single parameter declaration
+    ND_PARAM_LIST,       // Comma-separated parameter list
     ND_DIRECT_DECL, // Declarator: identifier + optional ptr '*' + param list
     ND_COMP_STMT,   // Compound statement  { ... }
     ND_RETURN_STMT, // return [expr] ;
@@ -28,6 +32,7 @@ typedef enum {
     ND_TERNARY,     // cond ? then : else
     ND_ASSIGN,      // lvalue op= rvalue
     ND_COMMA,       // expr , expr
+    ND_LOCAL_DECL,  // local variable declaration: type name [= init] ;
 } node_kind_t;
 
 typedef struct node node_t;
@@ -42,6 +47,11 @@ struct node {
     int line;         // source line (1-based)
     int col;          // source column (1-based)
     union {
+        struct {
+            int nfuncs;
+            node_t *funcs[64]; // MAX_FUNCS == 64
+        } translation_unit;    // used when kind == ND_TRANSLATION_UNIT
+
         enum {
             ND_TYPE_VOID, // void
             ND_TYPE_CHAR, // char
@@ -57,7 +67,9 @@ struct node {
             node_t *decl_spec;  // return type
             node_t *declarator; // name, pointer level, and parameter list
             node_t *comp_stmt;  // function body
-        } func;                 // used when kind == ND_FUNC
+            int frame_size;     // total stack bytes to reserve (subq $N, %rsp)
+            sym_t *params_sym_list; // sym_t chain for params (freed with node)
+        } func;                     // used when kind == ND_FUNC
 
         struct {
             node_t *decl_spec;  // type of the parameter
@@ -94,6 +106,7 @@ struct node {
 
         struct {
             node_str_t name; // identifier name (not null-terminated)
+            sym_t *sym;      // resolved symbol; NULL if undeclared
         } ident;             // used when kind == ND_IDENT
 
         struct {
@@ -164,6 +177,13 @@ struct node {
             node_t *left;
             node_t *right;
         } comma; // used when kind == ND_COMMA
+
+        struct {
+            node_t *decl_spec;  // ND_DECL_SPEC describing the type
+            node_t *declarator; // ND_DIRECT_DECL — name + pointer_level
+            node_t *init;       // optional initializer expr; NULL if absent
+            sym_t *sym;         // resolved symbol entry
+        } local_decl;           // used when kind == ND_LOCAL_DECL
     };
 };
 

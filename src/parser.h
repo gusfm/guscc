@@ -3,11 +3,14 @@
 
 #include "ast.h"
 #include "lex.h"
+#include "sym.h"
 
 typedef struct {
     lex_t l;              // Lexer
     token_t *next_token;  // First lookahead (NULL = not loaded)
     token_t *next_token2; // Second lookahead (NULL = not loaded)
+    scope_t *scope;       // Current scope; NULL outside a function
+    int frame_offset; // Running stack offset (0 at function entry, decrements)
 } parser_t;
 
 void parser_init(parser_t *p, char *buf, size_t size);

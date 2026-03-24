@@ -1,6 +1,7 @@
 #include "ast.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include "sym.h"
 
 node_t *node_create(node_kind_t kind, int line, int col)
 {
@@ -16,10 +17,15 @@ void node_destroy(node_t *node)
     if (node == NULL)
         return;
     switch (node->kind) {
+        case ND_TRANSLATION_UNIT:
+            for (int i = 0; i < node->translation_unit.nfuncs; i++)
+                node_destroy(node->translation_unit.funcs[i]);
+            break;
         case ND_FUNC:
             node_destroy(node->func.decl_spec);
             node_destroy(node->func.declarator);
             node_destroy(node->func.comp_stmt);
+            sym_destroy_list(node->func.params_sym_list);
             break;
         case ND_DECL_SPEC:
             node_destroy(node->decl_spec.type_spec);
@@ -89,6 +95,12 @@ void node_destroy(node_t *node)
         case ND_COMMA:
             node_destroy(node->comma.left);
             node_destroy(node->comma.right);
+            break;
+        case ND_LOCAL_DECL:
+            node_destroy(node->local_decl.decl_spec);
+            node_destroy(node->local_decl.declarator);
+            node_destroy(node->local_decl.init);
+            free(node->local_decl.sym);
             break;
         case ND_TYPE_SPEC:
         case ND_NUM:
@@ -178,6 +190,12 @@ void ast_print(node_t *n, int indent)
         return;
     }
     switch (n->kind) {
+        case ND_TRANSLATION_UNIT:
+            printf("Translation unit: %d function(s)\n",
+                   n->translation_unit.nfuncs);
+            for (int i = 0; i < n->translation_unit.nfuncs; i++)
+                ast_print(n->translation_unit.funcs[i], indent + 1);
+            break;
         case ND_FUNC:
             printf("Function definition:%d:%d:\n", n->line, n->col);
             ast_print(n->func.decl_spec, indent + 1);
@@ -231,8 +249,13 @@ void ast_print(node_t *n, int indent)
                    n->num.val.str);
             break;
         case ND_IDENT:
-            printf("Identifier:%d:%d: %.*s\n", n->line, n->col,
-                   n->ident.name.len, n->ident.name.str);
+            if (n->ident.sym)
+                printf("Identifier:%d:%d: %.*s (offset=%d)\n", n->line, n->col,
+                       n->ident.name.len, n->ident.name.str,
+                       n->ident.sym->offset);
+            else
+                printf("Identifier:%d:%d: %.*s (unresolved)\n", n->line, n->col,
+                       n->ident.name.len, n->ident.name.str);
             break;
         case ND_STR:
             printf("String:%d:%d: %.*s\n", n->line, n->col, n->str.val.len,
@@ -308,6 +331,15 @@ void ast_print(node_t *n, int indent)
             printf("Comma:%d:%d:\n", n->line, n->col);
             ast_print(n->comma.left, indent + 1);
             ast_print(n->comma.right, indent + 1);
+            break;
+        case ND_LOCAL_DECL:
+            printf("LocalDecl:%d:%d: %.*s (offset=%d)\n", n->line, n->col,
+                   n->local_decl.declarator->direct_decl.ident.len,
+                   n->local_decl.declarator->direct_decl.ident.str,
+                   n->local_decl.sym ? n->local_decl.sym->offset : 0);
+            ast_print(n->local_decl.decl_spec, indent + 1);
+            if (n->local_decl.init)
+                ast_print(n->local_decl.init, indent + 1);
             break;
     }
 }

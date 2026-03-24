@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "ast.h"
+#include "sym.h"
 
 // Forward declarations
 node_t *parser_declarator(parser_t *p);
@@ -19,6 +20,8 @@ void parser_init(parser_t *p, char *buf, size_t size)
     lex_init(&p->l, buf, size);
     p->next_token = NULL;
     p->next_token2 = NULL;
+    p->scope = NULL;
+    p->frame_offset = 0;
 }
 
 void parser_finish(parser_t *p)
@@ -228,6 +231,80 @@ static bool parser_is_type_token(token_type_t type)
            type == TOKEN_KW_VOID;
 }
 
+/* Return the byte size of a type given its decl_spec and pointer level */
+static int parser_sym_size(node_t *decl_spec, int pointer_level)
+{
+    if (pointer_level > 0)
+        return 8;
+    if (decl_spec == NULL || decl_spec->decl_spec.type_spec == NULL)
+        return 4;
+    switch (decl_spec->decl_spec.type_spec->type_spec) {
+        case ND_TYPE_CHAR:
+            return 1;
+        case ND_TYPE_INT:
+            return 4;
+        case ND_TYPE_VOID:
+            return 1;
+    }
+    return 4;
+}
+
+/* Align offset (negative) to -align boundary going further negative.
+ * e.g. parser_align_down(-1, 4) == -4, parser_align_down(-5, 4) == -8 */
+static int parser_align_down(int offset, int align)
+{
+    /* offset is <= 0; we want the most-negative multiple of align >= offset */
+    return -((-offset + align - 1) / align * align);
+}
+
+/* Parse a local variable declaration: decl_spec declarator [= expr] ;
+ * Defines the symbol in the current scope and returns ND_LOCAL_DECL. */
+static node_t *parser_local_declaration(parser_t *p)
+{
+    node_t *decl_spec = parser_declaration_specifiers(p);
+    if (decl_spec == NULL)
+        return NULL;
+
+    node_t *declarator = parser_declarator(p);
+    if (declarator == NULL) {
+        node_destroy(decl_spec);
+        return NULL;
+    }
+
+    int pointer_level = declarator->direct_decl.pointer_level;
+    int size = parser_sym_size(decl_spec, pointer_level);
+    p->frame_offset =
+        parser_align_down(p->frame_offset - size, size < 8 ? size : 8);
+
+    sym_t *sym = scope_define(p->scope, declarator->direct_decl.ident.str,
+                              declarator->direct_decl.ident.len, decl_spec,
+                              pointer_level, p->frame_offset);
+
+    node_t *init = NULL;
+    if (parser_accept(p, '=')) {
+        init = parser_assignment_expression(p);
+        if (init == NULL) {
+            node_destroy(decl_spec);
+            node_destroy(declarator);
+            return NULL;
+        }
+    }
+
+    if (!parser_expect(p, ';')) {
+        node_destroy(decl_spec);
+        node_destroy(declarator);
+        node_destroy(init);
+        return NULL;
+    }
+
+    node_t *n = node_create(ND_LOCAL_DECL, decl_spec->line, decl_spec->col);
+    n->local_decl.decl_spec = decl_spec;
+    n->local_decl.declarator = declarator;
+    n->local_decl.init = init;
+    n->local_decl.sym = sym;
+    return n;
+}
+
 // Parse a type name for cast / sizeof: declaration_specifiers + optional '*'*
 static node_t *parser_type_name(parser_t *p)
 {
@@ -260,6 +337,13 @@ node_t *parser_primary_expression(parser_t *p)
         node_t *n = node_create(ND_IDENT, tok->line, tok->col);
         n->ident.name.str = tok->sval;
         n->ident.name.len = tok->len;
+        if (p->scope) {
+            n->ident.sym = scope_lookup(p->scope, tok->sval, tok->len);
+            if (n->ident.sym == NULL)
+                fprintf(stderr,
+                        "%d:%d: warning: undeclared identifier '%.*s'\n",
+                        tok->line, tok->col, tok->len, tok->sval);
+        }
         token_destroy(tok);
         return n;
     }
@@ -1047,20 +1131,17 @@ node_t *parser_statement(parser_t *p)
     }
 }
 
-bool parser_statement_list(parser_t *p, node_t *comp)
+static bool parser_block_item_list(parser_t *p, node_t *comp)
 {
-    node_t *stmt = parser_statement(p);
-    if (stmt == NULL)
-        return false;
-    comp->comp_stmt.stmts[comp->comp_stmt.nstmts++] = stmt;
-    while (1) {
-        if (parser_peek(p)->type == '}') {
-            return true;
-        }
-        stmt = parser_statement(p);
-        if (stmt == NULL)
+    while (parser_peek(p)->type != '}') {
+        node_t *item;
+        if (parser_is_type_token(parser_peek(p)->type))
+            item = parser_local_declaration(p);
+        else
+            item = parser_statement(p);
+        if (item == NULL)
             return false;
-        comp->comp_stmt.stmts[comp->comp_stmt.nstmts++] = stmt;
+        comp->comp_stmt.stmts[comp->comp_stmt.nstmts++] = item;
     }
     return true;
 }
@@ -1072,10 +1153,28 @@ node_t *parser_compound_statement(parser_t *p)
         return NULL;
     node_t *n = node_create(ND_COMP_STMT, lbrace->line, lbrace->col);
     token_destroy(lbrace);
-    if (!parser_statement_list(p, n)) {
+
+    // Push a child scope for this block (nested in the function scope)
+    scope_t *parent_scope = p->scope;
+    if (parent_scope != NULL)
+        p->scope = scope_new(parent_scope);
+
+    if (!parser_block_item_list(p, n)) {
+        if (p->scope != parent_scope) {
+            scope_free(p->scope);
+            p->scope = parent_scope;
+        }
         node_destroy(n);
         return NULL;
     }
+
+    // Pop the child scope; any sym_t nodes for locals are owned by
+    // ND_LOCAL_DECL
+    if (p->scope != parent_scope) {
+        scope_free(p->scope);
+        p->scope = parent_scope;
+    }
+
     if (!parser_expect(p, '}')) {
         node_destroy(n);
         return NULL;
@@ -1094,27 +1193,72 @@ node_t *parser_function_definition(parser_t *p)
         node_destroy(decl_spec);
         return NULL;
     }
+
+    // Set up symbol table scope for the function body
+    p->frame_offset = 0;
+    p->scope = scope_new(NULL);
+
+    // Register parameters in the function scope
+    node_t *param_list = declarator->direct_decl.param_list;
+    if (param_list != NULL) {
+        for (int i = 0; i < param_list->param_list.nparams; i++) {
+            node_t *pd = param_list->param_list.params[i];
+            int ptr_lvl = pd->param_decl.declarator->direct_decl.pointer_level;
+            int size = parser_sym_size(pd->param_decl.decl_spec, ptr_lvl);
+            p->frame_offset =
+                parser_align_down(p->frame_offset - size, size < 8 ? size : 8);
+            scope_define(p->scope,
+                         pd->param_decl.declarator->direct_decl.ident.str,
+                         pd->param_decl.declarator->direct_decl.ident.len,
+                         pd->param_decl.decl_spec, ptr_lvl, p->frame_offset);
+        }
+    }
+
     node_t *comp_stmt = parser_compound_statement(p);
     if (comp_stmt == NULL) {
+        sym_destroy_list(p->scope->syms);
+        scope_free(p->scope);
+        p->scope = NULL;
         node_destroy(decl_spec);
         node_destroy(declarator);
         return NULL;
     }
+
+    // Round frame size up to a multiple of 16 (x86-64 ABI requirement)
+    int frame_size = -p->frame_offset;
+    frame_size = (frame_size + 15) & ~15;
+
+    sym_t *params_sym_list = p->scope->syms;
+    p->scope->syms = NULL; // detach before freeing scope struct
+    scope_free(p->scope);
+    p->scope = NULL;
+
     node_t *node = node_create(ND_FUNC, decl_spec->line, decl_spec->col);
     node->func.decl_spec = decl_spec;
     node->func.declarator = declarator;
     node->func.comp_stmt = comp_stmt;
+    node->func.frame_size = frame_size;
+    node->func.params_sym_list = params_sym_list;
     return node;
 }
 
 node_t *parser_translation_unit(parser_t *p)
 {
-    node_t *func = parser_function_definition(p);
-    if (func == NULL) {
+    node_t *tu = node_create(ND_TRANSLATION_UNIT, 0, 0);
+    while (parser_peek(p) != NULL) {
+        node_t *func = parser_function_definition(p);
+        if (func == NULL) {
+            node_destroy(tu);
+            return NULL;
+        }
+        tu->translation_unit.funcs[tu->translation_unit.nfuncs++] = func;
+    }
+    if (tu->translation_unit.nfuncs == 0) {
+        node_destroy(tu);
         return NULL;
     }
-    ast_print(func, 0);
-    return func;
+    ast_print(tu, 0);
+    return tu;
 }
 
 node_t *parser_exec(parser_t *p)

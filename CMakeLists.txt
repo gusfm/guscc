@@ -8,6 +8,7 @@ add_library(guscc_obj OBJECT
     src/token.c
     src/lex.c
     src/ast.c
+    src/sym.c
     src/parser.c
     src/codegen.c
 )
