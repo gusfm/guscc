@@ -67,6 +67,6 @@ Parameters are assigned negative `%rbp` offsets in declaration order (first para
 
 - `for` and `do-while` statement parsing is not yet implemented
 - Array subscript (`a[i]`) and struct member access (`a.b`, `a->b`) are parsed but not yet implemented in codegen
-- Functions are not tracked in the symbol table (function calls produce an "undeclared identifier" warning but work correctly)
+- Forward function calls (callee defined later in the file) produce an "undeclared identifier" warning; prototype declarations are not yet supported
 - Global variable declarations are not yet supported
 - Only up to 6 integer parameters (System V AMD64 ABI register arguments)

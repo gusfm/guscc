@@ -22,6 +22,7 @@ void parser_init(parser_t *p, char *buf, size_t size)
     p->next_token = NULL;
     p->next_token2 = NULL;
     p->scope = NULL;
+    p->func_scope = scope_new(NULL);
     p->frame_offset = 0;
 }
 
@@ -34,6 +35,11 @@ void parser_finish(parser_t *p)
     if (p->next_token2) {
         token_destroy(p->next_token2);
         p->next_token2 = NULL;
+    }
+    if (p->func_scope) {
+        sym_destroy_list(p->func_scope->syms);
+        scope_free(p->func_scope);
+        p->func_scope = NULL;
     }
 }
 
@@ -340,6 +346,9 @@ node_t *parser_primary_expression(parser_t *p)
         n->ident.name.len = tok->len;
         if (p->scope) {
             n->ident.sym = scope_lookup(p->scope, tok->sval, tok->len);
+            if (n->ident.sym == NULL)
+                n->ident.sym =
+                    scope_lookup(p->func_scope, tok->sval, tok->len);
             if (n->ident.sym == NULL)
                 fprintf(stderr,
                         "%d:%d: warning: undeclared identifier '%.*s'\n",
@@ -1310,6 +1319,13 @@ node_t *parser_function_definition(parser_t *p)
     node->func.comp_stmt = comp_stmt;
     node->func.frame_size = frame_size;
     node->func.params_sym_list = params_sym_list;
+
+    // Register the function name in the global function scope so that calls
+    // to this function after its definition resolve without a warning.
+    node_str_t fname = declarator->direct_decl.ident;
+    scope_define(p->func_scope, fname.str, fname.len,
+                 decl_spec, declarator->direct_decl.pointer_level, 0);
+
     return node;
 }
 
