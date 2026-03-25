@@ -25,8 +25,8 @@ void sym_destroy_list(sym_t *sym)
     }
 }
 
-sym_t *scope_define(scope_t *scope, const char *name, int name_len,
-                    node_t *decl_spec, int pointer_level, int offset)
+sym_t *scope_define(scope_t *scope, const char *name, int name_len, node_t *decl_spec,
+                    int pointer_level, int offset)
 {
     sym_t *s = malloc(sizeof(sym_t));
     s->name = name;
@@ -43,8 +43,7 @@ sym_t *scope_lookup(scope_t *scope, const char *name, int name_len)
 {
     for (scope_t *sc = scope; sc != NULL; sc = sc->parent) {
         for (sym_t *s = sc->syms; s != NULL; s = s->next) {
-            if (s->name_len == name_len &&
-                memcmp(s->name, name, (size_t)name_len) == 0)
+            if (s->name_len == name_len && memcmp(s->name, name, (size_t)name_len) == 0)
                 return s;
         }
     }

@@ -137,38 +137,31 @@ token_t *lex_next(lex_t *l)
         case '+':
             c2 = lex_readc(l);
             if (c2 == '+')
-                return token_create(TOKEN_INC_OP, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_INC_OP, l->p - 2, l->p, tok_line, tok_col);
             if (c2 == '=')
-                return token_create(TOKEN_ADD_ASSIGN, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_ADD_ASSIGN, l->p - 2, l->p, tok_line, tok_col);
             lex_ungetc(l);
             return token_create('+', l->p - 1, l->p, tok_line, tok_col);
         case '-':
             c2 = lex_readc(l);
             if (c2 == '-')
-                return token_create(TOKEN_DEC_OP, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_DEC_OP, l->p - 2, l->p, tok_line, tok_col);
             if (c2 == '>')
-                return token_create(TOKEN_PTR_OP, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_PTR_OP, l->p - 2, l->p, tok_line, tok_col);
             if (c2 == '=')
-                return token_create(TOKEN_SUB_ASSIGN, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_SUB_ASSIGN, l->p - 2, l->p, tok_line, tok_col);
             lex_ungetc(l);
             return token_create('-', l->p - 1, l->p, tok_line, tok_col);
         case '*':
             c2 = lex_readc(l);
             if (c2 == '=')
-                return token_create(TOKEN_MUL_ASSIGN, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_MUL_ASSIGN, l->p - 2, l->p, tok_line, tok_col);
             lex_ungetc(l);
             return token_create('*', l->p - 1, l->p, tok_line, tok_col);
         case '/':
             c2 = lex_readc(l);
             if (c2 == '=')
-                return token_create(TOKEN_DIV_ASSIGN, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_DIV_ASSIGN, l->p - 2, l->p, tok_line, tok_col);
             if (c2 == '/') {
                 while ((c2 = lex_readc(l)) != '\n' && c2 != EOF)
                     ;
@@ -193,8 +186,7 @@ token_t *lex_next(lex_t *l)
         case '%':
             c2 = lex_readc(l);
             if (c2 == '=')
-                return token_create(TOKEN_MOD_ASSIGN, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_MOD_ASSIGN, l->p - 2, l->p, tok_line, tok_col);
             lex_ungetc(l);
             return token_create('%', l->p - 1, l->p, tok_line, tok_col);
         case '<':
@@ -202,15 +194,12 @@ token_t *lex_next(lex_t *l)
             if (c2 == '<') {
                 c3 = lex_readc(l);
                 if (c3 == '=')
-                    return token_create(TOKEN_LEFT_ASSIGN, l->p - 3, l->p,
-                                        tok_line, tok_col);
+                    return token_create(TOKEN_LEFT_ASSIGN, l->p - 3, l->p, tok_line, tok_col);
                 lex_ungetc(l);
-                return token_create(TOKEN_LEFT_OP, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_LEFT_OP, l->p - 2, l->p, tok_line, tok_col);
             }
             if (c2 == '=')
-                return token_create(TOKEN_LE_OP, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_LE_OP, l->p - 2, l->p, tok_line, tok_col);
             lex_ungetc(l);
             return token_create('<', l->p - 1, l->p, tok_line, tok_col);
         case '>':
@@ -218,56 +207,46 @@ token_t *lex_next(lex_t *l)
             if (c2 == '>') {
                 c3 = lex_readc(l);
                 if (c3 == '=')
-                    return token_create(TOKEN_RIGHT_ASSIGN, l->p - 3, l->p,
-                                        tok_line, tok_col);
+                    return token_create(TOKEN_RIGHT_ASSIGN, l->p - 3, l->p, tok_line, tok_col);
                 lex_ungetc(l);
-                return token_create(TOKEN_RIGHT_OP, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_RIGHT_OP, l->p - 2, l->p, tok_line, tok_col);
             }
             if (c2 == '=')
-                return token_create(TOKEN_GE_OP, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_GE_OP, l->p - 2, l->p, tok_line, tok_col);
             lex_ungetc(l);
             return token_create('>', l->p - 1, l->p, tok_line, tok_col);
         case '=':
             c2 = lex_readc(l);
             if (c2 == '=')
-                return token_create(TOKEN_EQ_OP, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_EQ_OP, l->p - 2, l->p, tok_line, tok_col);
             lex_ungetc(l);
             return token_create('=', l->p - 1, l->p, tok_line, tok_col);
         case '!':
             c2 = lex_readc(l);
             if (c2 == '=')
-                return token_create(TOKEN_NE_OP, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_NE_OP, l->p - 2, l->p, tok_line, tok_col);
             lex_ungetc(l);
             return token_create('!', l->p - 1, l->p, tok_line, tok_col);
         case '&':
             c2 = lex_readc(l);
             if (c2 == '&')
-                return token_create(TOKEN_AND_OP, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_AND_OP, l->p - 2, l->p, tok_line, tok_col);
             if (c2 == '=')
-                return token_create(TOKEN_AND_ASSIGN, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_AND_ASSIGN, l->p - 2, l->p, tok_line, tok_col);
             lex_ungetc(l);
             return token_create('&', l->p - 1, l->p, tok_line, tok_col);
         case '|':
             c2 = lex_readc(l);
             if (c2 == '|')
-                return token_create(TOKEN_OR_OP, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_OR_OP, l->p - 2, l->p, tok_line, tok_col);
             if (c2 == '=')
-                return token_create(TOKEN_OR_ASSIGN, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_OR_ASSIGN, l->p - 2, l->p, tok_line, tok_col);
             lex_ungetc(l);
             return token_create('|', l->p - 1, l->p, tok_line, tok_col);
         case '^':
             c2 = lex_readc(l);
             if (c2 == '=')
-                return token_create(TOKEN_XOR_ASSIGN, l->p - 2, l->p, tok_line,
-                                    tok_col);
+                return token_create(TOKEN_XOR_ASSIGN, l->p - 2, l->p, tok_line, tok_col);
             lex_ungetc(l);
             return token_create('^', l->p - 1, l->p, tok_line, tok_col);
         case '0':

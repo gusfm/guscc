@@ -87,8 +87,8 @@ token_t *parser_expect_token(parser_t *p, token_type_t type)
         return t;
     } else {
         char str[100];
-        fprintf(stderr, "Expected %s but received '%.*s'\n",
-                token_type_to_str(type, str, 100), t->len, t->sval);
+        fprintf(stderr, "Expected %s but received '%.*s'\n", token_type_to_str(type, str, 100),
+                t->len, t->sval);
         token_destroy(t);
         return NULL;
     }
@@ -234,8 +234,7 @@ node_t *parser_declarator(parser_t *p)
 
 static bool parser_is_type_token(token_type_t type)
 {
-    return type == TOKEN_KW_INT || type == TOKEN_KW_CHAR ||
-           type == TOKEN_KW_VOID;
+    return type == TOKEN_KW_INT || type == TOKEN_KW_CHAR || type == TOKEN_KW_VOID;
 }
 
 /* Return the byte size of a type given its decl_spec and pointer level */
@@ -280,12 +279,11 @@ static node_t *parser_local_declaration(parser_t *p)
 
     int pointer_level = declarator->direct_decl.pointer_level;
     int size = parser_sym_size(decl_spec, pointer_level);
-    p->frame_offset =
-        parser_align_down(p->frame_offset - size, size < 8 ? size : 8);
+    p->frame_offset = parser_align_down(p->frame_offset - size, size < 8 ? size : 8);
 
-    sym_t *sym = scope_define(p->scope, declarator->direct_decl.ident.str,
-                              declarator->direct_decl.ident.len, decl_spec,
-                              pointer_level, p->frame_offset);
+    sym_t *sym =
+        scope_define(p->scope, declarator->direct_decl.ident.str, declarator->direct_decl.ident.len,
+                     decl_spec, pointer_level, p->frame_offset);
 
     node_t *init = NULL;
     if (parser_accept(p, '=')) {
@@ -347,12 +345,10 @@ node_t *parser_primary_expression(parser_t *p)
         if (p->scope) {
             n->ident.sym = scope_lookup(p->scope, tok->sval, tok->len);
             if (n->ident.sym == NULL)
-                n->ident.sym =
-                    scope_lookup(p->func_scope, tok->sval, tok->len);
+                n->ident.sym = scope_lookup(p->func_scope, tok->sval, tok->len);
             if (n->ident.sym == NULL)
-                fprintf(stderr,
-                        "%d:%d: warning: undeclared identifier '%.*s'\n",
-                        tok->line, tok->col, tok->len, tok->sval);
+                fprintf(stderr, "%d:%d: warning: undeclared identifier '%.*s'\n", tok->line,
+                        tok->col, tok->len, tok->sval);
         }
         token_destroy(tok);
         return n;
@@ -384,8 +380,7 @@ node_t *parser_primary_expression(parser_t *p)
         }
         return inner;
     }
-    fprintf(stderr, "Expected expression but received '%.*s'\n", tok->len,
-            tok->sval);
+    fprintf(stderr, "Expected expression but received '%.*s'\n", tok->len, tok->sval);
     return NULL;
 }
 
@@ -542,8 +537,8 @@ node_t *parser_unary_expression(parser_t *p)
         return n;
     }
 
-    if (peek->type == '&' || peek->type == '*' || peek->type == '+' ||
-        peek->type == '-' || peek->type == '~' || peek->type == '!') {
+    if (peek->type == '&' || peek->type == '*' || peek->type == '+' || peek->type == '-' ||
+        peek->type == '~' || peek->type == '!') {
         token_t *op_tok = parser_next(p);
         node_t *operand = parser_cast_expression(p);
         if (operand == NULL) {
@@ -750,8 +745,8 @@ node_t *parser_relational_expression(parser_t *p)
         token_t *peek = parser_peek(p);
         if (peek == NULL)
             break;
-        if (peek->type != '<' && peek->type != '>' &&
-            peek->type != TOKEN_LE_OP && peek->type != TOKEN_GE_OP)
+        if (peek->type != '<' && peek->type != '>' && peek->type != TOKEN_LE_OP &&
+            peek->type != TOKEN_GE_OP)
             break;
         token_t *op_tok = parser_next(p);
         int op = op_tok->type, line = op_tok->line, col = op_tok->col;
@@ -1007,12 +1002,10 @@ node_t *parser_conditional_expression(parser_t *p)
 
 static bool parser_is_assign_op(token_type_t type)
 {
-    return type == '=' || type == TOKEN_MUL_ASSIGN ||
-           type == TOKEN_DIV_ASSIGN || type == TOKEN_MOD_ASSIGN ||
-           type == TOKEN_ADD_ASSIGN || type == TOKEN_SUB_ASSIGN ||
-           type == TOKEN_LEFT_ASSIGN || type == TOKEN_RIGHT_ASSIGN ||
-           type == TOKEN_AND_ASSIGN || type == TOKEN_XOR_ASSIGN ||
-           type == TOKEN_OR_ASSIGN;
+    return type == '=' || type == TOKEN_MUL_ASSIGN || type == TOKEN_DIV_ASSIGN ||
+           type == TOKEN_MOD_ASSIGN || type == TOKEN_ADD_ASSIGN || type == TOKEN_SUB_ASSIGN ||
+           type == TOKEN_LEFT_ASSIGN || type == TOKEN_RIGHT_ASSIGN || type == TOKEN_AND_ASSIGN ||
+           type == TOKEN_XOR_ASSIGN || type == TOKEN_OR_ASSIGN;
 }
 
 /*
@@ -1306,12 +1299,10 @@ node_t *parser_function_definition(parser_t *p)
             node_t *pd = param_list->param_list.params[i];
             int ptr_lvl = pd->param_decl.declarator->direct_decl.pointer_level;
             int size = parser_sym_size(pd->param_decl.decl_spec, ptr_lvl);
-            p->frame_offset =
-                parser_align_down(p->frame_offset - size, size < 8 ? size : 8);
-            scope_define(p->scope,
-                         pd->param_decl.declarator->direct_decl.ident.str,
-                         pd->param_decl.declarator->direct_decl.ident.len,
-                         pd->param_decl.decl_spec, ptr_lvl, p->frame_offset);
+            p->frame_offset = parser_align_down(p->frame_offset - size, size < 8 ? size : 8);
+            scope_define(p->scope, pd->param_decl.declarator->direct_decl.ident.str,
+                         pd->param_decl.declarator->direct_decl.ident.len, pd->param_decl.decl_spec,
+                         ptr_lvl, p->frame_offset);
         }
     }
 
@@ -1344,8 +1335,8 @@ node_t *parser_function_definition(parser_t *p)
     // Register the function name in the global function scope so that calls
     // to this function after its definition resolve without a warning.
     node_str_t fname = declarator->direct_decl.ident;
-    scope_define(p->func_scope, fname.str, fname.len,
-                 decl_spec, declarator->direct_decl.pointer_level, 0);
+    scope_define(p->func_scope, fname.str, fname.len, decl_spec,
+                 declarator->direct_decl.pointer_level, 0);
 
     return node;
 }

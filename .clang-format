@@ -13,3 +13,4 @@ IncludeCategories:
 PointerAlignment: Right
 AlignEscapedNewlinesLeft: true
 IndentCaseLabels: true
+ColumnLimit: 100

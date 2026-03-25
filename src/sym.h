@@ -15,7 +15,7 @@ typedef struct sym {
 
 /* A single lexical scope (function body, nested block, etc.) */
 typedef struct scope {
-    sym_t *syms; /* head of symbol list (most-recently-defined first) */
+    sym_t *syms;          /* head of symbol list (most-recently-defined first) */
     struct scope *parent; /* enclosing scope; NULL for function-top scope */
 } scope_t;
 
@@ -29,8 +29,8 @@ void scope_free(scope_t *scope);
 void sym_destroy_list(sym_t *sym);
 
 /* Define a new symbol in scope. Prepends to scope->syms. Returns the entry. */
-sym_t *scope_define(scope_t *scope, const char *name, int name_len,
-                    node_t *decl_spec, int pointer_level, int offset);
+sym_t *scope_define(scope_t *scope, const char *name, int name_len, node_t *decl_spec,
+                    int pointer_level, int offset);
 
 /* Look up name walking the parent scope chain. Returns NULL if not found. */
 sym_t *scope_lookup(scope_t *scope, const char *name, int name_len);

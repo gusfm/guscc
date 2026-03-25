@@ -203,8 +203,7 @@ void ast_print(node_t *n, int indent)
     }
     switch (n->kind) {
         case ND_TRANSLATION_UNIT:
-            printf("Translation unit: %d function(s)\n",
-                   n->translation_unit.nfuncs);
+            printf("Translation unit: %d function(s)\n", n->translation_unit.nfuncs);
             for (int i = 0; i < n->translation_unit.nfuncs; i++)
                 ast_print(n->translation_unit.funcs[i], indent + 1);
             break;
@@ -219,8 +218,7 @@ void ast_print(node_t *n, int indent)
             ast_print(n->decl_spec.type_spec, indent + 1);
             break;
         case ND_TYPE_SPEC:
-            printf("Type specifier:%d:%d: %s\n", n->line, n->col,
-                   type_spec_to_str(n->type_spec));
+            printf("Type specifier:%d:%d: %s\n", n->line, n->col, type_spec_to_str(n->type_spec));
             break;
         case ND_PARAM_DECL:
             printf("Parameter declaration:%d:%d:\n", n->line, n->col);
@@ -235,8 +233,8 @@ void ast_print(node_t *n, int indent)
             break;
         case ND_DIRECT_DECL:
             printf("Direct declarator:%d:%d: ", n->line, n->col);
-            printf("%.*s pointer_level=%d\n", n->direct_decl.ident.len,
-                   n->direct_decl.ident.str, n->direct_decl.pointer_level);
+            printf("%.*s pointer_level=%d\n", n->direct_decl.ident.len, n->direct_decl.ident.str,
+                   n->direct_decl.pointer_level);
             if (n->direct_decl.param_list) {
                 ast_print(n->direct_decl.param_list, indent + 1);
             }
@@ -275,41 +273,35 @@ void ast_print(node_t *n, int indent)
                 ast_print(n->expr_stmt.expr, indent + 1);
             break;
         case ND_NUM:
-            printf("Number:%d:%d: %.*s\n", n->line, n->col, n->num.val.len,
-                   n->num.val.str);
+            printf("Number:%d:%d: %.*s\n", n->line, n->col, n->num.val.len, n->num.val.str);
             break;
         case ND_IDENT:
             if (n->ident.sym)
-                printf("Identifier:%d:%d: %.*s (offset=%d)\n", n->line, n->col,
-                       n->ident.name.len, n->ident.name.str,
-                       n->ident.sym->offset);
+                printf("Identifier:%d:%d: %.*s (offset=%d)\n", n->line, n->col, n->ident.name.len,
+                       n->ident.name.str, n->ident.sym->offset);
             else
-                printf("Identifier:%d:%d: %.*s (unresolved)\n", n->line, n->col,
-                       n->ident.name.len, n->ident.name.str);
+                printf("Identifier:%d:%d: %.*s (unresolved)\n", n->line, n->col, n->ident.name.len,
+                       n->ident.name.str);
             break;
         case ND_STR:
-            printf("String:%d:%d: %.*s\n", n->line, n->col, n->str.val.len,
-                   n->str.val.str);
+            printf("String:%d:%d: %.*s\n", n->line, n->col, n->str.val.len, n->str.val.str);
             break;
         case ND_BINOP: {
             char buf[4];
-            printf("BinOp:%d:%d: %s\n", n->line, n->col,
-                   op_to_str(n->binop.op, buf));
+            printf("BinOp:%d:%d: %s\n", n->line, n->col, op_to_str(n->binop.op, buf));
             ast_print(n->binop.left, indent + 1);
             ast_print(n->binop.right, indent + 1);
             break;
         }
         case ND_UNOP: {
             char buf[4];
-            printf("UnaryOp:%d:%d: %s\n", n->line, n->col,
-                   op_to_str(n->unop.op, buf));
+            printf("UnaryOp:%d:%d: %s\n", n->line, n->col, op_to_str(n->unop.op, buf));
             ast_print(n->unop.operand, indent + 1);
             break;
         }
         case ND_POSTOP: {
             char buf[4];
-            printf("PostfixOp:%d:%d: %s\n", n->line, n->col,
-                   op_to_str(n->postop.op, buf));
+            printf("PostfixOp:%d:%d: %s\n", n->line, n->col, op_to_str(n->postop.op, buf));
             ast_print(n->postop.operand, indent + 1);
             break;
         }
@@ -325,9 +317,8 @@ void ast_print(node_t *n, int indent)
                 ast_print(n->call.args[i], indent + 1);
             break;
         case ND_MEMBER:
-            printf("Member:%d:%d: %s%.*s\n", n->line, n->col,
-                   n->member.is_ptr ? "->" : ".", n->member.field.len,
-                   n->member.field.str);
+            printf("Member:%d:%d: %s%.*s\n", n->line, n->col, n->member.is_ptr ? "->" : ".",
+                   n->member.field.len, n->member.field.str);
             ast_print(n->member.object, indent + 1);
             break;
         case ND_CAST:
@@ -351,8 +342,7 @@ void ast_print(node_t *n, int indent)
             break;
         case ND_ASSIGN: {
             char buf[4];
-            printf("Assign:%d:%d: %s\n", n->line, n->col,
-                   op_to_str(n->assign.op, buf));
+            printf("Assign:%d:%d: %s\n", n->line, n->col, op_to_str(n->assign.op, buf));
             ast_print(n->assign.lhs, indent + 1);
             ast_print(n->assign.rhs, indent + 1);
             break;

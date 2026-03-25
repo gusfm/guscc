@@ -3,8 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-token_t *token_create(token_type_t type, char *start, char *end, int line,
-                      int col)
+token_t *token_create(token_type_t type, char *start, char *end, int line, int col)
 {
     token_t *t = malloc(sizeof(token_t));
     t->type = type;
@@ -155,6 +154,5 @@ const char *token_type_to_str(token_type_t type, char *str, size_t len)
 
 void token_print_error(token_t *t, const char *expected)
 {
-    fprintf(stderr, "Expected %s but received '%.*s'\n", expected, t->len,
-            t->sval);
+    fprintf(stderr, "Expected %s but received '%.*s'\n", expected, t->len, t->sval);
 }

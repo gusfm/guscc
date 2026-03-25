@@ -11,12 +11,9 @@ static void cg_node(codegen_t *cg, node_t *n);
 static void cg_expr(codegen_t *cg, node_t *n);
 
 // x86-64 System V ABI integer argument registers (64-bit / 32-bit / 8-bit)
-static const char *arg_regs64[6] = {"%rdi", "%rsi", "%rdx",
-                                    "%rcx", "%r8",  "%r9"};
-static const char *arg_regs32[6] = {"%edi", "%esi", "%edx",
-                                    "%ecx", "%r8d", "%r9d"};
-static const char *arg_regs8[6] = {"%dil", "%sil", "%dl",
-                                   "%cl",  "%r8b", "%r9b"};
+static const char *arg_regs64[6] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
+static const char *arg_regs32[6] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+static const char *arg_regs8[6] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b"};
 
 // Return the byte size of a sym (1 / 4 / 8)
 static int sym_get_size(sym_t *sym)
@@ -202,8 +199,7 @@ static void cg_unop(codegen_t *cg, node_t *n)
     if (op == '&') {
         node_t *operand = n->unop.operand;
         if (operand->kind == ND_IDENT && operand->ident.sym) {
-            fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n",
-                    operand->ident.sym->offset);
+            fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", operand->ident.sym->offset);
         } else {
             fprintf(stderr, "codegen: & applied to non-addressable operand\n");
         }
@@ -256,8 +252,7 @@ static void cg_cast(codegen_t *cg, node_t *n)
     cg_expr(cg, n->cast.expr);
     node_t *ds = n->cast.type_node;
     if (ds && ds->kind == ND_DECL_SPEC && ds->decl_spec.pointer_level == 0 &&
-        ds->decl_spec.type_spec &&
-        ds->decl_spec.type_spec->type_spec == ND_TYPE_CHAR) {
+        ds->decl_spec.type_spec && ds->decl_spec.type_spec->type_spec == ND_TYPE_CHAR) {
         fprintf(cg->out, "\tmovsbl\t%%al, %%eax\n");
     }
 }
@@ -321,8 +316,8 @@ static void cg_lvalue_addr(codegen_t *cg, node_t *n)
 {
     if (n->kind == ND_IDENT) {
         if (n->ident.sym == NULL) {
-            fprintf(stderr, "error: use of undeclared identifier '%.*s'\n",
-                    n->ident.name.len, n->ident.name.str);
+            fprintf(stderr, "error: use of undeclared identifier '%.*s'\n", n->ident.name.len,
+                    n->ident.name.str);
             cg->errors++;
             return;
         }
@@ -340,8 +335,8 @@ static void cg_load_lvalue(codegen_t *cg, node_t *n)
 {
     if (n->kind == ND_IDENT) {
         if (n->ident.sym == NULL) {
-            fprintf(stderr, "error: use of undeclared identifier '%.*s'\n",
-                    n->ident.name.len, n->ident.name.str);
+            fprintf(stderr, "error: use of undeclared identifier '%.*s'\n", n->ident.name.len,
+                    n->ident.name.str);
             cg->errors++;
             fprintf(cg->out, "\txorl\t%%eax, %%eax\n");
             return;
@@ -360,8 +355,8 @@ static void cg_store_to_lvalue(codegen_t *cg, node_t *lhs)
 {
     if (lhs->kind == ND_IDENT) {
         if (lhs->ident.sym == NULL) {
-            fprintf(stderr, "error: use of undeclared identifier '%.*s'\n",
-                    lhs->ident.name.len, lhs->ident.name.str);
+            fprintf(stderr, "error: use of undeclared identifier '%.*s'\n", lhs->ident.name.len,
+                    lhs->ident.name.str);
             cg->errors++;
             return;
         }
@@ -408,8 +403,8 @@ static int compound_base_op(int op)
 static void cg_ident(codegen_t *cg, node_t *n)
 {
     if (n->ident.sym == NULL) {
-        fprintf(stderr, "error: use of undeclared identifier '%.*s'\n",
-                n->ident.name.len, n->ident.name.str);
+        fprintf(stderr, "error: use of undeclared identifier '%.*s'\n", n->ident.name.len,
+                n->ident.name.str);
         cg->errors++;
         fprintf(cg->out, "\txorl\t%%eax, %%eax\n");
         return;
@@ -464,8 +459,7 @@ static void cg_call(codegen_t *cg, node_t *n)
     // Emit the call
     node_t *func = n->call.func;
     if (func->kind == ND_IDENT) {
-        fprintf(cg->out, "\tcall\t%.*s\n", func->ident.name.len,
-                func->ident.name.str);
+        fprintf(cg->out, "\tcall\t%.*s\n", func->ident.name.len, func->ident.name.str);
     } else {
         cg_expr(cg, func); // indirect call (function pointer)
         fprintf(cg->out, "\tcall\t*%%rax\n");
@@ -539,8 +533,7 @@ static void cg_expr(codegen_t *cg, node_t *n)
             cg_comma(cg, n);
             break;
         default:
-            fprintf(stderr, "codegen: unsupported expression kind %d\n",
-                    n->kind);
+            fprintf(stderr, "codegen: unsupported expression kind %d\n", n->kind);
             break;
     }
 }
@@ -661,14 +654,11 @@ static void cg_func(codegen_t *cg, node_t *n)
                 continue;
             int size = sym_get_size(sym);
             if (size == 8)
-                fprintf(cg->out, "\tmovq\t%s, %d(%%rbp)\n", arg_regs64[i],
-                        sym->offset);
+                fprintf(cg->out, "\tmovq\t%s, %d(%%rbp)\n", arg_regs64[i], sym->offset);
             else if (size == 1)
-                fprintf(cg->out, "\tmovb\t%s, %d(%%rbp)\n", arg_regs8[i],
-                        sym->offset);
+                fprintf(cg->out, "\tmovb\t%s, %d(%%rbp)\n", arg_regs8[i], sym->offset);
             else
-                fprintf(cg->out, "\tmovl\t%s, %d(%%rbp)\n", arg_regs32[i],
-                        sym->offset);
+                fprintf(cg->out, "\tmovl\t%s, %d(%%rbp)\n", arg_regs32[i], sym->offset);
         }
     }
 

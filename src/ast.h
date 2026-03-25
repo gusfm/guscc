@@ -13,30 +13,30 @@ typedef enum {
     ND_TYPE_SPEC,        // Type specifier leaf (void / char / int)
     ND_PARAM_DECL,       // Single parameter declaration
     ND_PARAM_LIST,       // Comma-separated parameter list
-    ND_DIRECT_DECL,   // Declarator: identifier + optional ptr '*' + param list
-    ND_COMP_STMT,     // Compound statement  { ... }
-    ND_IF_STMT,       // if (cond) then [else else_]
-    ND_WHILE_STMT,    // while (cond) body
-    ND_BREAK_STMT,    // break ;
-    ND_CONTINUE_STMT, // continue ;
-    ND_RETURN_STMT,   // return [expr] ;
-    ND_EXPR_STMT,     // [expr] ;
-    ND_NUM,           // Number literal
-    ND_IDENT,         // Identifier reference
-    ND_STR,           // String literal
-    ND_BINOP,         // Binary operator (left op right)
-    ND_UNOP,          // Prefix unary operator (op operand)
-    ND_POSTOP,        // Postfix ++ / --
-    ND_SUBSCRIPT,     // a[i]
-    ND_CALL,          // f(args...)
-    ND_MEMBER,        // a.b or a->b
-    ND_CAST,          // (type)expr
-    ND_SIZEOF_EXPR,   // sizeof expr
-    ND_SIZEOF_TYPE,   // sizeof(type_name)
-    ND_TERNARY,       // cond ? then : else
-    ND_ASSIGN,        // lvalue op= rvalue
-    ND_COMMA,         // expr , expr
-    ND_LOCAL_DECL,    // local variable declaration: type name [= init] ;
+    ND_DIRECT_DECL,      // Declarator: identifier + optional ptr '*' + param list
+    ND_COMP_STMT,        // Compound statement  { ... }
+    ND_IF_STMT,          // if (cond) then [else else_]
+    ND_WHILE_STMT,       // while (cond) body
+    ND_BREAK_STMT,       // break ;
+    ND_CONTINUE_STMT,    // continue ;
+    ND_RETURN_STMT,      // return [expr] ;
+    ND_EXPR_STMT,        // [expr] ;
+    ND_NUM,              // Number literal
+    ND_IDENT,            // Identifier reference
+    ND_STR,              // String literal
+    ND_BINOP,            // Binary operator (left op right)
+    ND_UNOP,             // Prefix unary operator (op operand)
+    ND_POSTOP,           // Postfix ++ / --
+    ND_SUBSCRIPT,        // a[i]
+    ND_CALL,             // f(args...)
+    ND_MEMBER,           // a.b or a->b
+    ND_CAST,             // (type)expr
+    ND_SIZEOF_EXPR,      // sizeof expr
+    ND_SIZEOF_TYPE,      // sizeof(type_name)
+    ND_TERNARY,          // cond ? then : else
+    ND_ASSIGN,           // lvalue op= rvalue
+    ND_COMMA,            // expr , expr
+    ND_LOCAL_DECL,       // local variable declaration: type name [= init] ;
 } node_kind_t;
 
 typedef struct node node_t;
@@ -68,10 +68,10 @@ struct node {
         } decl_spec;           // used when kind == ND_DECL_SPEC
 
         struct {
-            node_t *decl_spec;  // return type
-            node_t *declarator; // name, pointer level, and parameter list
-            node_t *comp_stmt;  // function body
-            int frame_size;     // total stack bytes to reserve (subq $N, %rsp)
+            node_t *decl_spec;      // return type
+            node_t *declarator;     // name, pointer level, and parameter list
+            node_t *comp_stmt;      // function body
+            int frame_size;         // total stack bytes to reserve (subq $N, %rsp)
             sym_t *params_sym_list; // sym_t chain for params (freed with node)
         } func;                     // used when kind == ND_FUNC
 
@@ -125,9 +125,8 @@ struct node {
         } ident;             // used when kind == ND_IDENT
 
         struct {
-            node_str_t
-                val; // string value including quotes (not null-terminated)
-        } str;       // used when kind == ND_STR
+            node_str_t val; // string value including quotes (not null-terminated)
+        } str;              // used when kind == ND_STR
 
         struct {
             int op; // token type of the operator
