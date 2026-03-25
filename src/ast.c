@@ -51,6 +51,7 @@ void node_destroy(node_t *node)
             node_destroy(node->if_stmt.else_);
             break;
         case ND_WHILE_STMT:
+        case ND_DO_WHILE_STMT:
             node_destroy(node->while_stmt.cond);
             node_destroy(node->while_stmt.body);
             break;
@@ -255,6 +256,11 @@ void ast_print(node_t *n, int indent)
             printf("WhileStatement:%d:%d:\n", n->line, n->col);
             ast_print(n->while_stmt.cond, indent + 1);
             ast_print(n->while_stmt.body, indent + 1);
+            break;
+        case ND_DO_WHILE_STMT:
+            printf("DoWhileStatement:%d:%d:\n", n->line, n->col);
+            ast_print(n->while_stmt.body, indent + 1);
+            ast_print(n->while_stmt.cond, indent + 1);
             break;
         case ND_BREAK_STMT:
             printf("BreakStatement:%d:%d:\n", n->line, n->col);

@@ -1141,8 +1141,11 @@ node_t *parser_selection_statement(parser_t *p)
  */
 node_t *parser_iteration_statement(parser_t *p)
 {
-    token_t *t = parser_next(p); // consume 'while'
+    token_t *t = parser_peek(p);
     if (t->type == TOKEN_KW_WHILE) {
+        t = parser_next(p); // consume 'while'
+        int line = t->line, col = t->col;
+        token_destroy(t);
         if (!parser_expect(p, '('))
             return NULL;
         node_t *cond = parser_expression(p);
@@ -1152,10 +1155,42 @@ node_t *parser_iteration_statement(parser_t *p)
             return NULL;
 
         node_t *body = parser_statement(p);
+        if (!body) {
+            node_destroy(cond);
+            return NULL;
+        }
+
+        node_t *n = node_create(ND_WHILE_STMT, line, col);
+        n->while_stmt.cond = cond;
+        n->while_stmt.body = body;
+        return n;
+    } else if (t->type == TOKEN_KW_DO) {
+        t = parser_next(p); // consume 'do'
+        int line = t->line, col = t->col;
+        token_destroy(t);
+
+        node_t *body = parser_statement(p);
         if (!body)
             return NULL;
-
-        node_t *n = node_create(ND_WHILE_STMT, t->line, t->col);
+        if (!parser_expect(p, TOKEN_KW_WHILE)) {
+            node_destroy(body);
+            return NULL;
+        }
+        if (!parser_expect(p, '(')) {
+            node_destroy(body);
+            return NULL;
+        }
+        node_t *cond = parser_expression(p);
+        if (!cond) {
+            node_destroy(body);
+            return NULL;
+        }
+        if (!parser_expect(p, ')') || !parser_expect(p, ';')) {
+            node_destroy(cond);
+            node_destroy(body);
+            return NULL;
+        }
+        node_t *n = node_create(ND_DO_WHILE_STMT, line, col);
         n->while_stmt.cond = cond;
         n->while_stmt.body = body;
         return n;
@@ -1215,7 +1250,7 @@ node_t *parser_statement(parser_t *p)
         return parser_compound_statement(p);
     } else if (t->type == TOKEN_KW_IF) {
         return parser_selection_statement(p);
-    } else if (t->type == TOKEN_KW_WHILE) {
+    } else if (t->type == TOKEN_KW_WHILE || t->type == TOKEN_KW_DO) {
         return parser_iteration_statement(p);
     } else if (t->type == TOKEN_KW_RETURN || t->type == TOKEN_KW_BREAK ||
                t->type == TOKEN_KW_CONTINUE) {

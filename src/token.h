@@ -15,6 +15,7 @@ typedef enum {
     TOKEN_KW_VOID,       // void keyword
     TOKEN_KW_BREAK,      // break keyword
     TOKEN_KW_CONTINUE,   // continue keyword
+    TOKEN_KW_DO,         // do keyword
     TOKEN_KW_WHILE,      // while keyword
     TOKEN_KW_SIZEOF,     // sizeof keyword
     TOKEN_INC_OP,        // ++

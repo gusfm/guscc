@@ -17,6 +17,7 @@ typedef enum {
     ND_COMP_STMT,        // Compound statement  { ... }
     ND_IF_STMT,          // if (cond) then [else else_]
     ND_WHILE_STMT,       // while (cond) body
+    ND_DO_WHILE_STMT,    // do body while (cond) ;
     ND_BREAK_STMT,       // break ;
     ND_CONTINUE_STMT,    // continue ;
     ND_RETURN_STMT,      // return [expr] ;

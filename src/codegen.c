@@ -41,6 +41,7 @@ void codegen_init(codegen_t *cg, FILE *out)
     cg->label_count = 0;
     cg->errors = 0;
     cg->loop_label = -1;
+    cg->loop_is_do_while = 0;
 }
 
 void codegen_finish(codegen_t *cg)
@@ -568,14 +569,19 @@ static void cg_continue_stmt(codegen_t *cg, node_t *n)
         cg->errors++;
         return;
     }
-    fprintf(cg->out, "\tjmp\t.L%d_start\n", cg->loop_label);
+    if (cg->loop_is_do_while)
+        fprintf(cg->out, "\tjmp\t.L%d_cond\n", cg->loop_label);
+    else
+        fprintf(cg->out, "\tjmp\t.L%d_start\n", cg->loop_label);
 }
 
 static void cg_while_stmt(codegen_t *cg, node_t *n)
 {
     int lbl = cg->label_count++;
     int prev_loop = cg->loop_label;
+    int prev_do = cg->loop_is_do_while;
     cg->loop_label = lbl;
+    cg->loop_is_do_while = 0;
     fprintf(cg->out, ".L%d_start:\n", lbl);
     cg_expr(cg, n->while_stmt.cond);
     fprintf(cg->out, "\ttestl\t%%eax, %%eax\n");
@@ -584,6 +590,25 @@ static void cg_while_stmt(codegen_t *cg, node_t *n)
     fprintf(cg->out, "\tjmp\t.L%d_start\n", lbl);
     fprintf(cg->out, ".L%d_end:\n", lbl);
     cg->loop_label = prev_loop;
+    cg->loop_is_do_while = prev_do;
+}
+
+static void cg_do_while_stmt(codegen_t *cg, node_t *n)
+{
+    int lbl = cg->label_count++;
+    int prev_loop = cg->loop_label;
+    int prev_do = cg->loop_is_do_while;
+    cg->loop_label = lbl;
+    cg->loop_is_do_while = 1;
+    fprintf(cg->out, ".L%d_start:\n", lbl);
+    cg_node(cg, n->while_stmt.body);
+    fprintf(cg->out, ".L%d_cond:\n", lbl);
+    cg_expr(cg, n->while_stmt.cond);
+    fprintf(cg->out, "\ttestl\t%%eax, %%eax\n");
+    fprintf(cg->out, "\tjne\t.L%d_start\n", lbl);
+    fprintf(cg->out, ".L%d_end:\n", lbl);
+    cg->loop_label = prev_loop;
+    cg->loop_is_do_while = prev_do;
 }
 
 static void cg_if_stmt(codegen_t *cg, node_t *n)
@@ -698,6 +723,9 @@ static void cg_node(codegen_t *cg, node_t *n)
             break;
         case ND_WHILE_STMT:
             cg_while_stmt(cg, n);
+            break;
+        case ND_DO_WHILE_STMT:
+            cg_do_while_stmt(cg, n);
             break;
         case ND_RETURN_STMT:
             cg_return_stmt(cg, n);

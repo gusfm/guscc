@@ -220,6 +220,27 @@ static int guscc_test_23(void)
                            "/tmp/guscc_test_23_out", 3);
 }
 
+/* test_24: basic do-while */
+static int guscc_test_24(void)
+{
+    return compile_and_run("../test/files/test_24.c", "./test_24.s",
+                           "/tmp/guscc_test_24_out", 5);
+}
+
+/* test_25: do-while body executes at least once */
+static int guscc_test_25(void)
+{
+    return compile_and_run("../test/files/test_25.c", "./test_25.s",
+                           "/tmp/guscc_test_25_out", 1);
+}
+
+/* test_26: continue in do-while jumps to condition check */
+static int guscc_test_26(void)
+{
+    return compile_and_run("../test/files/test_26.c", "./test_26.s",
+                           "/tmp/guscc_test_26_out", 4);
+}
+
 /* test_fail_4: break outside loop */
 static int guscc_test_fail_4(void)
 {
@@ -276,6 +297,11 @@ void guscc_test(void)
     ut_run(guscc_test_21);
     ut_run(guscc_test_22);
     ut_run(guscc_test_23);
+
+    /* do-while */
+    ut_run(guscc_test_24);
+    ut_run(guscc_test_25);
+    ut_run(guscc_test_26);
 
     /* Failure paths */
     ut_run(guscc_test_fail_1);
