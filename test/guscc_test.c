@@ -148,7 +148,7 @@ static int guscc_test_fail_1(void)
     return 0;
 }
 
-/* test_fail_2: unsupported 'while' statement — parser returns NULL */
+/* test_fail_2: unsupported 'for' loop — parser returns NULL */
 static int guscc_test_fail_2(void)
 {
     int ret = run_test("../test/files/test_fail_2.c");
@@ -175,6 +175,20 @@ static int guscc_test_18(void)
 {
     return compile_and_run("../test/files/test_18.c", "./test_18.s",
                            "/tmp/guscc_test_18_out", 5);
+}
+
+/* test_19: basic while loop (no braces) */
+static int guscc_test_19(void)
+{
+    return compile_and_run("../test/files/test_19.c", "./test_19.s",
+                           "/tmp/guscc_test_19_out", 5);
+}
+
+/* test_20: while with braces and function call */
+static int guscc_test_20(void)
+{
+    return compile_and_run("../test/files/test_20.c", "./test_20.s",
+                           "/tmp/guscc_test_20_out", 32);
 }
 
 /* test_fail_3: undefined variable */
@@ -216,6 +230,10 @@ void guscc_test(void)
     ut_run(guscc_test_16);
     ut_run(guscc_test_17);
     ut_run(guscc_test_18);
+
+    /* while */
+    ut_run(guscc_test_19);
+    ut_run(guscc_test_20);
 
     /* Failure paths */
     ut_run(guscc_test_fail_1);

@@ -50,6 +50,10 @@ void node_destroy(node_t *node)
             node_destroy(node->if_stmt.then);
             node_destroy(node->if_stmt.else_);
             break;
+        case ND_WHILE_STMT:
+            node_destroy(node->while_stmt.cond);
+            node_destroy(node->while_stmt.body);
+            break;
         case ND_RETURN_STMT:
             node_destroy(node->return_stmt.expr);
             break;
@@ -245,6 +249,11 @@ void ast_print(node_t *n, int indent)
             ast_print(n->if_stmt.then, indent + 1);
             if (n->if_stmt.else_)
                 ast_print(n->if_stmt.else_, indent + 1);
+            break;
+        case ND_WHILE_STMT:
+            printf("WhileStatement:%d:%d:\n", n->line, n->col);
+            ast_print(n->while_stmt.cond, indent + 1);
+            ast_print(n->while_stmt.body, indent + 1);
             break;
         case ND_RETURN_STMT:
             printf("Return statement:%d:%d:\n", n->line, n->col);

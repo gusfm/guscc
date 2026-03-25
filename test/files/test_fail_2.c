@@ -1,7 +1,8 @@
-/* test_fail_2: while statement not yet implemented; guscc should exit non-zero */
+/* test_fail_2: for loop not yet implemented; guscc should exit non-zero */
 int main()
 {
-    while (1)
-        return 42;
+    int x;
+    for (x = 0; x < 10; x++)
+        x = x + 1;
     return 0;
 }

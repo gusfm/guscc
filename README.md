@@ -1,6 +1,6 @@
 # guscc
 
-A simple recursive-descent C compiler written in C99, aimed at eventual self-hosting. It supports a limited subset of C: `void`/`char`/`int` types, multiple functions per file, local variables, parameters, assignments, function calls, `if`/`else`, `return`, and the full ANSI C expression syntax.
+A simple recursive-descent C compiler written in C99, aimed at eventual self-hosting. It supports a limited subset of C: `void`/`char`/`int` types, multiple functions per file, local variables, parameters, assignments, function calls, `if`/`else`, `while`, `return`, and expressions.
 
 Given a C source file, `guscc` compiles it to x86-64 assembly (`.s`). By default only errors are printed to stderr. Pass `-d` to also print three debug sections to stdout: source with line numbers, the lexer token stream, and the parser AST.
 
@@ -65,7 +65,7 @@ Parameters are assigned negative `%rbp` offsets in declaration order (first para
 
 ## Current limitations
 
-- `while` statement parsing is not yet implemented (stubbed)
+- `for` and `do-while` statement parsing is not yet implemented
 - Array subscript (`a[i]`) and struct member access (`a.b`, `a->b`) are parsed but not yet implemented in codegen
 - Functions are not tracked in the symbol table (function calls produce an "undeclared identifier" warning but work correctly)
 - Global variable declarations are not yet supported

@@ -557,6 +557,18 @@ static void cg_expr_stmt(codegen_t *cg, node_t *n)
         cg_expr(cg, n->expr_stmt.expr);
 }
 
+static void cg_while_stmt(codegen_t *cg, node_t *n)
+{
+    int lbl = cg->label_count++;
+    fprintf(cg->out, ".L%d_start:\n", lbl);
+    cg_expr(cg, n->while_stmt.cond);
+    fprintf(cg->out, "\ttestl\t%%eax, %%eax\n");
+    fprintf(cg->out, "\tje\t.L%d_end\n", lbl);
+    cg_node(cg, n->while_stmt.body);
+    fprintf(cg->out, "\tjmp\t.L%d_start\n", lbl);
+    fprintf(cg->out, ".L%d_end:\n", lbl);
+}
+
 static void cg_if_stmt(codegen_t *cg, node_t *n)
 {
     int lbl = cg->label_count++;
@@ -669,6 +681,9 @@ static void cg_node(codegen_t *cg, node_t *n)
             break;
         case ND_IF_STMT:
             cg_if_stmt(cg, n);
+            break;
+        case ND_WHILE_STMT:
+            cg_while_stmt(cg, n);
             break;
         case ND_RETURN_STMT:
             cg_return_stmt(cg, n);

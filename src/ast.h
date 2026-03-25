@@ -16,6 +16,7 @@ typedef enum {
     ND_DIRECT_DECL, // Declarator: identifier + optional ptr '*' + param list
     ND_COMP_STMT,   // Compound statement  { ... }
     ND_IF_STMT,     // if (cond) then [else else_]
+    ND_WHILE_STMT,  // while (cond) body
     ND_RETURN_STMT, // return [expr] ;
     ND_EXPR_STMT,   // [expr] ;
     ND_NUM,         // Number literal
@@ -98,6 +99,11 @@ struct node {
             node_t *then;
             node_t *else_; // NULL if no else clause
         } if_stmt;         // used when kind == ND_IF_STMT
+
+        struct {
+            node_t *cond;
+            node_t *body;
+        } while_stmt; // used when kind == ND_WHILE_STMT
 
         struct {
             node_t *expr; // NULL for bare return;
