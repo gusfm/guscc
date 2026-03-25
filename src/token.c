@@ -39,6 +39,10 @@ void token_print(token_t *t)
         printf("RETURN ");
     } else if (type == TOKEN_KW_VOID) {
         printf("VOID ");
+    } else if (type == TOKEN_KW_BREAK) {
+        printf("BREAK ");
+    } else if (type == TOKEN_KW_CONTINUE) {
+        printf("CONTINUE ");
     } else if (type == TOKEN_KW_WHILE) {
         printf("WHILE ");
     } else if (type == TOKEN_KW_SIZEOF) {

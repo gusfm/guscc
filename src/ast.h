@@ -13,28 +13,30 @@ typedef enum {
     ND_TYPE_SPEC,        // Type specifier leaf (void / char / int)
     ND_PARAM_DECL,       // Single parameter declaration
     ND_PARAM_LIST,       // Comma-separated parameter list
-    ND_DIRECT_DECL, // Declarator: identifier + optional ptr '*' + param list
-    ND_COMP_STMT,   // Compound statement  { ... }
-    ND_IF_STMT,     // if (cond) then [else else_]
-    ND_WHILE_STMT,  // while (cond) body
-    ND_RETURN_STMT, // return [expr] ;
-    ND_EXPR_STMT,   // [expr] ;
-    ND_NUM,         // Number literal
-    ND_IDENT,       // Identifier reference
-    ND_STR,         // String literal
-    ND_BINOP,       // Binary operator (left op right)
-    ND_UNOP,        // Prefix unary operator (op operand)
-    ND_POSTOP,      // Postfix ++ / --
-    ND_SUBSCRIPT,   // a[i]
-    ND_CALL,        // f(args...)
-    ND_MEMBER,      // a.b or a->b
-    ND_CAST,        // (type)expr
-    ND_SIZEOF_EXPR, // sizeof expr
-    ND_SIZEOF_TYPE, // sizeof(type_name)
-    ND_TERNARY,     // cond ? then : else
-    ND_ASSIGN,      // lvalue op= rvalue
-    ND_COMMA,       // expr , expr
-    ND_LOCAL_DECL,  // local variable declaration: type name [= init] ;
+    ND_DIRECT_DECL,   // Declarator: identifier + optional ptr '*' + param list
+    ND_COMP_STMT,     // Compound statement  { ... }
+    ND_IF_STMT,       // if (cond) then [else else_]
+    ND_WHILE_STMT,    // while (cond) body
+    ND_BREAK_STMT,    // break ;
+    ND_CONTINUE_STMT, // continue ;
+    ND_RETURN_STMT,   // return [expr] ;
+    ND_EXPR_STMT,     // [expr] ;
+    ND_NUM,           // Number literal
+    ND_IDENT,         // Identifier reference
+    ND_STR,           // String literal
+    ND_BINOP,         // Binary operator (left op right)
+    ND_UNOP,          // Prefix unary operator (op operand)
+    ND_POSTOP,        // Postfix ++ / --
+    ND_SUBSCRIPT,     // a[i]
+    ND_CALL,          // f(args...)
+    ND_MEMBER,        // a.b or a->b
+    ND_CAST,          // (type)expr
+    ND_SIZEOF_EXPR,   // sizeof expr
+    ND_SIZEOF_TYPE,   // sizeof(type_name)
+    ND_TERNARY,       // cond ? then : else
+    ND_ASSIGN,        // lvalue op= rvalue
+    ND_COMMA,         // expr , expr
+    ND_LOCAL_DECL,    // local variable declaration: type name [= init] ;
 } node_kind_t;
 
 typedef struct node node_t;

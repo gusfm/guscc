@@ -1172,6 +1172,26 @@ node_t *parser_iteration_statement(parser_t *p)
 
 node_t *parser_jump_statement(parser_t *p)
 {
+    token_t *t = parser_peek(p);
+    if (t->type == TOKEN_KW_BREAK) {
+        t = parser_next(p);
+        node_t *n = node_create(ND_BREAK_STMT, t->line, t->col);
+        token_destroy(t);
+        if (!parser_expect(p, ';')) {
+            node_destroy(n);
+            return NULL;
+        }
+        return n;
+    } else if (t->type == TOKEN_KW_CONTINUE) {
+        t = parser_next(p);
+        node_t *n = node_create(ND_CONTINUE_STMT, t->line, t->col);
+        token_destroy(t);
+        if (!parser_expect(p, ';')) {
+            node_destroy(n);
+            return NULL;
+        }
+        return n;
+    }
     token_t *ret_tok = parser_expect_token(p, TOKEN_KW_RETURN);
     if (ret_tok == NULL)
         return NULL;
@@ -1204,7 +1224,8 @@ node_t *parser_statement(parser_t *p)
         return parser_selection_statement(p);
     } else if (t->type == TOKEN_KW_WHILE) {
         return parser_iteration_statement(p);
-    } else if (t->type == TOKEN_KW_RETURN) {
+    } else if (t->type == TOKEN_KW_RETURN || t->type == TOKEN_KW_BREAK ||
+               t->type == TOKEN_KW_CONTINUE) {
         return parser_jump_statement(p);
     } else {
         return parser_expression_statement(p);

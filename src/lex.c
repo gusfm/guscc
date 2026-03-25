@@ -54,6 +54,10 @@ static token_type_t get_token_type(char *s, int len)
         return TOKEN_KW_WHILE;
     if (len == 6 && strncmp(s, "sizeof", 6) == 0)
         return TOKEN_KW_SIZEOF;
+    if (len == 5 && strncmp(s, "break", 5) == 0)
+        return TOKEN_KW_BREAK;
+    if (len == 8 && strncmp(s, "continue", 8) == 0)
+        return TOKEN_KW_CONTINUE;
     return TOKEN_IDENT;
 }
 

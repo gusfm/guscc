@@ -13,6 +13,8 @@ typedef enum {
     TOKEN_KW_INT,        // int keyword
     TOKEN_KW_RETURN,     // return keyword
     TOKEN_KW_VOID,       // void keyword
+    TOKEN_KW_BREAK,      // break keyword
+    TOKEN_KW_CONTINUE,   // continue keyword
     TOKEN_KW_WHILE,      // while keyword
     TOKEN_KW_SIZEOF,     // sizeof keyword
     TOKEN_INC_OP,        // ++

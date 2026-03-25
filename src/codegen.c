@@ -43,6 +43,7 @@ void codegen_init(codegen_t *cg, FILE *out)
     cg->func_name_len = 0;
     cg->label_count = 0;
     cg->errors = 0;
+    cg->loop_label = -1;
 }
 
 void codegen_finish(codegen_t *cg)
@@ -557,9 +558,31 @@ static void cg_expr_stmt(codegen_t *cg, node_t *n)
         cg_expr(cg, n->expr_stmt.expr);
 }
 
+static void cg_break_stmt(codegen_t *cg, node_t *n)
+{
+    if (cg->loop_label < 0) {
+        fprintf(stderr, "%d:%d: error: 'break' outside loop\n", n->line, n->col);
+        cg->errors++;
+        return;
+    }
+    fprintf(cg->out, "\tjmp\t.L%d_end\n", cg->loop_label);
+}
+
+static void cg_continue_stmt(codegen_t *cg, node_t *n)
+{
+    if (cg->loop_label < 0) {
+        fprintf(stderr, "%d:%d: error: 'continue' outside loop\n", n->line, n->col);
+        cg->errors++;
+        return;
+    }
+    fprintf(cg->out, "\tjmp\t.L%d_start\n", cg->loop_label);
+}
+
 static void cg_while_stmt(codegen_t *cg, node_t *n)
 {
     int lbl = cg->label_count++;
+    int prev_loop = cg->loop_label;
+    cg->loop_label = lbl;
     fprintf(cg->out, ".L%d_start:\n", lbl);
     cg_expr(cg, n->while_stmt.cond);
     fprintf(cg->out, "\ttestl\t%%eax, %%eax\n");
@@ -567,6 +590,7 @@ static void cg_while_stmt(codegen_t *cg, node_t *n)
     cg_node(cg, n->while_stmt.body);
     fprintf(cg->out, "\tjmp\t.L%d_start\n", lbl);
     fprintf(cg->out, ".L%d_end:\n", lbl);
+    cg->loop_label = prev_loop;
 }
 
 static void cg_if_stmt(codegen_t *cg, node_t *n)
@@ -687,6 +711,12 @@ static void cg_node(codegen_t *cg, node_t *n)
             break;
         case ND_RETURN_STMT:
             cg_return_stmt(cg, n);
+            break;
+        case ND_BREAK_STMT:
+            cg_break_stmt(cg, n);
+            break;
+        case ND_CONTINUE_STMT:
+            cg_continue_stmt(cg, n);
             break;
         case ND_EXPR_STMT:
             cg_expr_stmt(cg, n);

@@ -199,6 +199,43 @@ static int guscc_test_fail_3(void)
     return 0;
 }
 
+/* test_21: break exits while loop */
+static int guscc_test_21(void)
+{
+    return compile_and_run("../test/files/test_21.c", "./test_21.s",
+                           "/tmp/guscc_test_21_out", 5);
+}
+
+/* test_22: continue skips iteration */
+static int guscc_test_22(void)
+{
+    return compile_and_run("../test/files/test_22.c", "./test_22.s",
+                           "/tmp/guscc_test_22_out", 5);
+}
+
+/* test_23: nested loops, inner break only exits inner loop */
+static int guscc_test_23(void)
+{
+    return compile_and_run("../test/files/test_23.c", "./test_23.s",
+                           "/tmp/guscc_test_23_out", 3);
+}
+
+/* test_fail_4: break outside loop */
+static int guscc_test_fail_4(void)
+{
+    int ret = run_test("../test/files/test_fail_4.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
+/* test_fail_5: continue outside loop */
+static int guscc_test_fail_5(void)
+{
+    int ret = run_test("../test/files/test_fail_5.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -235,8 +272,15 @@ void guscc_test(void)
     ut_run(guscc_test_19);
     ut_run(guscc_test_20);
 
+    /* break / continue */
+    ut_run(guscc_test_21);
+    ut_run(guscc_test_22);
+    ut_run(guscc_test_23);
+
     /* Failure paths */
     ut_run(guscc_test_fail_1);
     ut_run(guscc_test_fail_2);
     ut_run(guscc_test_fail_3);
+    ut_run(guscc_test_fail_4);
+    ut_run(guscc_test_fail_5);
 }
