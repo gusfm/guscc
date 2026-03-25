@@ -8,6 +8,7 @@ typedef enum {
     TOKEN_NUM,           // constant number
     TOKEN_STR,           // string literal
     TOKEN_KW_CHAR,       // char keyword
+    TOKEN_KW_ELSE,       // else keyword
     TOKEN_KW_IF,         // if keyword
     TOKEN_KW_INT,        // int keyword
     TOKEN_KW_RETURN,     // return keyword

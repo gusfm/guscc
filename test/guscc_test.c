@@ -49,7 +49,7 @@ static int guscc_test_2(void)
                            "/tmp/guscc_test_2_out", 42);
 }
 
-/* test_3 uses unsupported 'if' — just verify guscc does not crash */
+/* test_3 uses unsupported features (printf, char**) — just verify no crash */
 static int guscc_test_3(void)
 {
     run_test("../test/files/test_3.c");
@@ -148,12 +148,33 @@ static int guscc_test_fail_1(void)
     return 0;
 }
 
-/* test_fail_2: unsupported 'if' statement — parser returns NULL */
+/* test_fail_2: unsupported 'while' statement — parser returns NULL */
 static int guscc_test_fail_2(void)
 {
     int ret = run_test("../test/files/test_fail_2.c");
     ASSERT(ret != 0);
     return 0;
+}
+
+/* test_16: if without else (no braces) */
+static int guscc_test_16(void)
+{
+    return compile_and_run("../test/files/test_16.c", "./test_16.s",
+                           "/tmp/guscc_test_16_out", 7);
+}
+
+/* test_17: if/else */
+static int guscc_test_17(void)
+{
+    return compile_and_run("../test/files/test_17.c", "./test_17.s",
+                           "/tmp/guscc_test_17_out", 2);
+}
+
+/* test_18: if/else with braces and function call in condition */
+static int guscc_test_18(void)
+{
+    return compile_and_run("../test/files/test_18.c", "./test_18.s",
+                           "/tmp/guscc_test_18_out", 5);
 }
 
 /* test_fail_3: undefined variable */
@@ -190,6 +211,11 @@ void guscc_test(void)
 
     /* Pointers */
     ut_run(guscc_test_15);
+
+    /* if/else */
+    ut_run(guscc_test_16);
+    ut_run(guscc_test_17);
+    ut_run(guscc_test_18);
 
     /* Failure paths */
     ut_run(guscc_test_fail_1);

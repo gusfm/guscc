@@ -40,6 +40,8 @@ static token_type_t get_token_type(char *s, int len)
 {
     if (len == 4 && strncmp(s, "char", 4) == 0)
         return TOKEN_KW_CHAR;
+    if (len == 4 && strncmp(s, "else", 4) == 0)
+        return TOKEN_KW_ELSE;
     if (len == 2 && strncmp(s, "if", 2) == 0)
         return TOKEN_KW_IF;
     if (len == 3 && strncmp(s, "int", 3) == 0)

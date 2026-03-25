@@ -9,6 +9,7 @@
 // Forward declarations
 node_t *parser_declarator(parser_t *p);
 node_t *parser_compound_statement(parser_t *p);
+node_t *parser_statement(parser_t *p);
 node_t *parser_declaration_specifiers(parser_t *p);
 node_t *parser_expression(parser_t *p);
 node_t *parser_assignment_expression(parser_t *p);
@@ -1088,6 +1089,46 @@ node_t *parser_expression_statement(parser_t *p)
     return n;
 }
 
+/*
+ * selection_statement
+ *  : IF '(' expression ')' statement
+ *  | IF '(' expression ')' statement ELSE statement
+ *  | SWITCH '(' expression ')' statement
+ *  ;
+ */
+node_t *parser_selection_statement(parser_t *p)
+{
+    token_t *t = parser_next(p);
+    if (t->type == TOKEN_KW_IF) {
+        if (!parser_expect(p, '('))
+            return NULL;
+        node_t *cond = parser_expression(p);
+        if (!cond)
+            return NULL;
+        if (!parser_expect(p, ')'))
+            return NULL;
+
+        node_t *then = parser_statement(p);
+        if (!then)
+            return NULL;
+
+        node_t *else_ = NULL;
+        if (parser_peek(p)->type == TOKEN_KW_ELSE) {
+            parser_next(p); // consume 'else'
+            else_ = parser_statement(p);
+            if (!else_)
+                return NULL;
+        }
+
+        node_t *n = node_create(ND_IF_STMT, t->line, t->col);
+        n->if_stmt.cond  = cond;
+        n->if_stmt.then  = then;
+        n->if_stmt.else_ = else_;
+        return n;
+    }
+    return NULL;
+}
+
 node_t *parser_jump_statement(parser_t *p)
 {
     token_t *ret_tok = parser_expect_token(p, TOKEN_KW_RETURN);
@@ -1119,8 +1160,7 @@ node_t *parser_statement(parser_t *p)
     if (t->type == '{') {
         return parser_compound_statement(p);
     } else if (t->type == TOKEN_KW_IF) {
-        // TODO: selection statement
-        return NULL;
+        return parser_selection_statement(p);
     } else if (t->type == TOKEN_KW_WHILE) {
         // TODO: iteration statement
         return NULL;

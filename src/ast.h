@@ -15,6 +15,7 @@ typedef enum {
     ND_PARAM_LIST,       // Comma-separated parameter list
     ND_DIRECT_DECL, // Declarator: identifier + optional ptr '*' + param list
     ND_COMP_STMT,   // Compound statement  { ... }
+    ND_IF_STMT,     // if (cond) then [else else_]
     ND_RETURN_STMT, // return [expr] ;
     ND_EXPR_STMT,   // [expr] ;
     ND_NUM,         // Number literal
@@ -91,6 +92,12 @@ struct node {
             int nstmts;        // number of entries in stmts[]
             node_t *stmts[64]; // MAX_STMTS == 64
         } comp_stmt;           // used when kind == ND_COMP_STMT
+
+        struct {
+            node_t *cond;
+            node_t *then;
+            node_t *else_; // NULL if no else clause
+        } if_stmt;         // used when kind == ND_IF_STMT
 
         struct {
             node_t *expr; // NULL for bare return;

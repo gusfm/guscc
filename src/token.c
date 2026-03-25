@@ -29,6 +29,8 @@ void token_print(token_t *t)
         printf("%.*s ", t->len, t->sval);
     } else if (type == TOKEN_KW_CHAR) {
         printf("CHAR ");
+    } else if (type == TOKEN_KW_ELSE) {
+        printf("ELSE ");
     } else if (type == TOKEN_KW_IF) {
         printf("IF ");
     } else if (type == TOKEN_KW_INT) {

@@ -1,6 +1,6 @@
 # guscc
 
-A simple recursive-descent C compiler written in C99, aimed at eventual self-hosting. It supports a limited subset of C: `void`/`char`/`int` types, multiple functions per file, local variables, parameters, assignments, function calls, `return`, and the full ANSI C expression syntax.
+A simple recursive-descent C compiler written in C99, aimed at eventual self-hosting. It supports a limited subset of C: `void`/`char`/`int` types, multiple functions per file, local variables, parameters, assignments, function calls, `if`/`else`, `return`, and the full ANSI C expression syntax.
 
 Given a C source file, `guscc` compiles it to x86-64 assembly (`.s`). By default only errors are printed to stderr. Pass `-d` to also print three debug sections to stdout: source with line numbers, the lexer token stream, and the parser AST.
 
@@ -35,20 +35,6 @@ gcc test_11.s -o test_11
 ./test_11; echo $?   # prints 42
 ```
 
-### Example — function call
-
-```c
-int add(int a, int b)
-{
-    return a + b;
-}
-
-int main()
-{
-    return add(40, 2);
-}
-```
-
 ## Testing
 
 Tests must be run from `build/` because they invoke `./guscc`:
@@ -79,7 +65,7 @@ Parameters are assigned negative `%rbp` offsets in declaration order (first para
 
 ## Current limitations
 
-- `if` and `while` statement parsing are not yet implemented (stubbed)
+- `while` statement parsing is not yet implemented (stubbed)
 - Array subscript (`a[i]`) and struct member access (`a.b`, `a->b`) are parsed but not yet implemented in codegen
 - Functions are not tracked in the symbol table (function calls produce an "undeclared identifier" warning but work correctly)
 - Global variable declarations are not yet supported
