@@ -37,309 +37,297 @@ static int compile_and_run(const char *src, const char *asm_out,
 
 /* ---- Original tests ---- */
 
-static int guscc_test_1(void)
+static int guscc_test_return_literal(void)
 {
-    return compile_and_run("../test/files/test_1.c", "./test_1.s",
-                           "/tmp/guscc_test_1_out", 42);
+    return compile_and_run("../test/files/return_literal.c", "./return_literal.s",
+                           "/tmp/guscc_return_literal_out", 42);
 }
 
-static int guscc_test_2(void)
+static int guscc_test_func_params_unused(void)
 {
-    return compile_and_run("../test/files/test_2.c", "./test_2.s",
-                           "/tmp/guscc_test_2_out", 42);
+    return compile_and_run("../test/files/func_params_unused.c", "./func_params_unused.s",
+                           "/tmp/guscc_func_params_unused_out", 42);
 }
 
-/* test_3 uses unsupported features (printf, char**) — just verify no crash */
-static int guscc_test_3(void)
+/* unsupported_features uses unsupported features (printf, char**) — just verify no crash */
+static int guscc_test_unsupported_features(void)
 {
-    run_test("../test/files/test_3.c");
+    run_test("../test/files/unsupported_features.c");
     return 0;
 }
 
-static int guscc_test_4(void)
+static int guscc_test_binary_ops(void)
 {
-    return compile_and_run("../test/files/test_4.c", "./test_4.s",
-                           "/tmp/guscc_test_4_out", 42);
+    return compile_and_run("../test/files/binary_ops.c", "./binary_ops.s",
+                           "/tmp/guscc_binary_ops_out", 42);
 }
 
-static int guscc_test_5(void)
+static int guscc_test_unary_ops(void)
 {
-    return compile_and_run("../test/files/test_5.c", "./test_5.s",
-                           "/tmp/guscc_test_5_out", 42);
+    return compile_and_run("../test/files/unary_ops.c", "./unary_ops.s",
+                           "/tmp/guscc_unary_ops_out", 42);
 }
 
-static int guscc_test_6(void)
+static int guscc_test_ternary(void)
 {
-    return compile_and_run("../test/files/test_6.c", "./test_6.s",
-                           "/tmp/guscc_test_6_out", 42);
+    return compile_and_run("../test/files/ternary.c", "./ternary.s",
+                           "/tmp/guscc_ternary_out", 42);
 }
 
-static int guscc_test_7(void)
+static int guscc_test_cast_and_sizeof(void)
 {
-    return compile_and_run("../test/files/test_7.c", "./test_7.s",
-                           "/tmp/guscc_test_7_out", 42);
+    return compile_and_run("../test/files/cast_and_sizeof.c", "./cast_and_sizeof.s",
+                           "/tmp/guscc_cast_and_sizeof_out", 42);
 }
 
-/* ---- New success-path tests ---- */
+/* ---- Identifier / symbol table / locals ---- */
 
-/* test_8: local variable declaration and assignment */
-static int guscc_test_8(void)
+static int guscc_test_local_var_decl(void)
 {
-    return compile_and_run("../test/files/test_8.c", "./test_8.s",
-                           "/tmp/guscc_test_8_out", 42);
+    return compile_and_run("../test/files/local_var_decl.c", "./local_var_decl.s",
+                           "/tmp/guscc_local_var_decl_out", 42);
 }
 
-/* test_9: local variable with initializer */
-static int guscc_test_9(void)
+static int guscc_test_local_var_initializer(void)
 {
-    return compile_and_run("../test/files/test_9.c", "./test_9.s",
-                           "/tmp/guscc_test_9_out", 42);
+    return compile_and_run("../test/files/local_var_initializer.c", "./local_var_initializer.s",
+                           "/tmp/guscc_local_var_initializer_out", 42);
 }
 
-/* test_10: multiple local variables */
-static int guscc_test_10(void)
+static int guscc_test_multiple_locals(void)
 {
-    return compile_and_run("../test/files/test_10.c", "./test_10.s",
-                           "/tmp/guscc_test_10_out", 42);
+    return compile_and_run("../test/files/multiple_locals.c", "./multiple_locals.s",
+                           "/tmp/guscc_multiple_locals_out", 42);
 }
 
-/* test_11: function call with parameters */
-static int guscc_test_11(void)
+/* ---- Function calls ---- */
+
+static int guscc_test_func_call_int_params(void)
 {
-    return compile_and_run("../test/files/test_11.c", "./test_11.s",
-                           "/tmp/guscc_test_11_out", 42);
+    return compile_and_run("../test/files/func_call_int_params.c", "./func_call_int_params.s",
+                           "/tmp/guscc_func_call_int_params_out", 42);
 }
 
-/* test_12: compound assignment operators (+= -=) */
-static int guscc_test_12(void)
+static int guscc_test_nested_func_calls(void)
 {
-    return compile_and_run("../test/files/test_12.c", "./test_12.s",
-                           "/tmp/guscc_test_12_out", 42);
+    return compile_and_run("../test/files/nested_func_calls.c", "./nested_func_calls.s",
+                           "/tmp/guscc_nested_func_calls_out", 42);
 }
 
-/* test_13: postfix ++ and -- */
-static int guscc_test_13(void)
+/* ---- Compound assignment, postfix ops ---- */
+
+static int guscc_test_compound_assign(void)
 {
-    return compile_and_run("../test/files/test_13.c", "./test_13.s",
-                           "/tmp/guscc_test_13_out", 42);
+    return compile_and_run("../test/files/compound_assign.c", "./compound_assign.s",
+                           "/tmp/guscc_compound_assign_out", 42);
 }
 
-/* test_14: nested function calls */
-static int guscc_test_14(void)
+static int guscc_test_postfix_inc_dec(void)
 {
-    return compile_and_run("../test/files/test_14.c", "./test_14.s",
-                           "/tmp/guscc_test_14_out", 42);
+    return compile_and_run("../test/files/postfix_inc_dec.c", "./postfix_inc_dec.s",
+                           "/tmp/guscc_postfix_inc_dec_out", 42);
 }
 
-/* test_15: pointer parameter and address-of / dereference */
-static int guscc_test_15(void)
+/* ---- Pointers ---- */
+
+static int guscc_test_pointer_ops(void)
 {
-    return compile_and_run("../test/files/test_15.c", "./test_15.s",
-                           "/tmp/guscc_test_15_out", 42);
+    return compile_and_run("../test/files/pointer_ops.c", "./pointer_ops.s",
+                           "/tmp/guscc_pointer_ops_out", 42);
 }
 
-/* ---- Failure-path tests: guscc must exit non-zero ---- */
+/* ---- if/else ---- */
 
-/* test_fail_1: syntax error (missing semicolon) */
-static int guscc_test_fail_1(void)
+static int guscc_test_if_no_else(void)
 {
-    int ret = run_test("../test/files/test_fail_1.c");
+    return compile_and_run("../test/files/if_no_else.c", "./if_no_else.s",
+                           "/tmp/guscc_if_no_else_out", 7);
+}
+
+static int guscc_test_if_else(void)
+{
+    return compile_and_run("../test/files/if_else.c", "./if_else.s",
+                           "/tmp/guscc_if_else_out", 2);
+}
+
+static int guscc_test_if_else_func_call(void)
+{
+    return compile_and_run("../test/files/if_else_func_call.c", "./if_else_func_call.s",
+                           "/tmp/guscc_if_else_func_call_out", 5);
+}
+
+/* ---- while ---- */
+
+static int guscc_test_while_basic(void)
+{
+    return compile_and_run("../test/files/while_basic.c", "./while_basic.s",
+                           "/tmp/guscc_while_basic_out", 5);
+}
+
+static int guscc_test_while_func_call(void)
+{
+    return compile_and_run("../test/files/while_func_call.c", "./while_func_call.s",
+                           "/tmp/guscc_while_func_call_out", 32);
+}
+
+/* ---- break / continue ---- */
+
+static int guscc_test_while_break(void)
+{
+    return compile_and_run("../test/files/while_break.c", "./while_break.s",
+                           "/tmp/guscc_while_break_out", 5);
+}
+
+static int guscc_test_while_continue(void)
+{
+    return compile_and_run("../test/files/while_continue.c", "./while_continue.s",
+                           "/tmp/guscc_while_continue_out", 5);
+}
+
+static int guscc_test_while_nested_break(void)
+{
+    return compile_and_run("../test/files/while_nested_break.c", "./while_nested_break.s",
+                           "/tmp/guscc_while_nested_break_out", 3);
+}
+
+/* ---- do-while ---- */
+
+static int guscc_test_do_while_basic(void)
+{
+    return compile_and_run("../test/files/do_while_basic.c", "./do_while_basic.s",
+                           "/tmp/guscc_do_while_basic_out", 5);
+}
+
+static int guscc_test_do_while_false_cond(void)
+{
+    return compile_and_run("../test/files/do_while_false_cond.c", "./do_while_false_cond.s",
+                           "/tmp/guscc_do_while_false_cond_out", 1);
+}
+
+static int guscc_test_do_while_continue(void)
+{
+    return compile_and_run("../test/files/do_while_continue.c", "./do_while_continue.s",
+                           "/tmp/guscc_do_while_continue_out", 4);
+}
+
+/* ---- for ---- */
+
+static int guscc_test_for_expr_init(void)
+{
+    return compile_and_run("../test/files/for_expr_init.c", "./for_expr_init.s",
+                           "/tmp/guscc_for_expr_init_out", 0);
+}
+
+static int guscc_test_for_basic(void)
+{
+    return compile_and_run("../test/files/for_basic.c", "./for_basic.s",
+                           "/tmp/guscc_for_basic_out", 15);
+}
+
+static int guscc_test_for_continue(void)
+{
+    return compile_and_run("../test/files/for_continue.c", "./for_continue.s",
+                           "/tmp/guscc_for_continue_out", 4);
+}
+
+static int guscc_test_for_break(void)
+{
+    return compile_and_run("../test/files/for_break.c", "./for_break.s",
+                           "/tmp/guscc_for_break_out", 2);
+}
+
+static int guscc_test_for_empty_clauses(void)
+{
+    return compile_and_run("../test/files/for_empty_clauses.c", "./for_empty_clauses.s",
+                           "/tmp/guscc_for_empty_clauses_out", 5);
+}
+
+/* ---- Failure paths: guscc must exit non-zero ---- */
+
+static int guscc_test_fail_syntax_error(void)
+{
+    int ret = run_test("../test/files/fail_syntax_error.c");
     ASSERT(ret != 0);
     return 0;
 }
 
-/* test_fail_2 (repurposed): for loop with expression init, returns 0 */
-static int guscc_test_fail_2(void)
+static int guscc_test_fail_undeclared_var(void)
 {
-    return compile_and_run("../test/files/test_fail_2.c", "./test_fail_2.s",
-                           "/tmp/guscc_test_fail_2_out", 0);
-}
-
-/* test_16: if without else (no braces) */
-static int guscc_test_16(void)
-{
-    return compile_and_run("../test/files/test_16.c", "./test_16.s",
-                           "/tmp/guscc_test_16_out", 7);
-}
-
-/* test_17: if/else */
-static int guscc_test_17(void)
-{
-    return compile_and_run("../test/files/test_17.c", "./test_17.s",
-                           "/tmp/guscc_test_17_out", 2);
-}
-
-/* test_18: if/else with braces and function call in condition */
-static int guscc_test_18(void)
-{
-    return compile_and_run("../test/files/test_18.c", "./test_18.s",
-                           "/tmp/guscc_test_18_out", 5);
-}
-
-/* test_19: basic while loop (no braces) */
-static int guscc_test_19(void)
-{
-    return compile_and_run("../test/files/test_19.c", "./test_19.s",
-                           "/tmp/guscc_test_19_out", 5);
-}
-
-/* test_20: while with braces and function call */
-static int guscc_test_20(void)
-{
-    return compile_and_run("../test/files/test_20.c", "./test_20.s",
-                           "/tmp/guscc_test_20_out", 32);
-}
-
-/* test_fail_3: undefined variable */
-static int guscc_test_fail_3(void)
-{
-    int ret = run_test("../test/files/test_fail_3.c");
+    int ret = run_test("../test/files/fail_undeclared_var.c");
     ASSERT(ret != 0);
     return 0;
 }
 
-/* test_21: break exits while loop */
-static int guscc_test_21(void)
+static int guscc_test_fail_break_outside_loop(void)
 {
-    return compile_and_run("../test/files/test_21.c", "./test_21.s",
-                           "/tmp/guscc_test_21_out", 5);
-}
-
-/* test_22: continue skips iteration */
-static int guscc_test_22(void)
-{
-    return compile_and_run("../test/files/test_22.c", "./test_22.s",
-                           "/tmp/guscc_test_22_out", 5);
-}
-
-/* test_23: nested loops, inner break only exits inner loop */
-static int guscc_test_23(void)
-{
-    return compile_and_run("../test/files/test_23.c", "./test_23.s",
-                           "/tmp/guscc_test_23_out", 3);
-}
-
-/* test_24: basic do-while */
-static int guscc_test_24(void)
-{
-    return compile_and_run("../test/files/test_24.c", "./test_24.s",
-                           "/tmp/guscc_test_24_out", 5);
-}
-
-/* test_25: do-while body executes at least once */
-static int guscc_test_25(void)
-{
-    return compile_and_run("../test/files/test_25.c", "./test_25.s",
-                           "/tmp/guscc_test_25_out", 1);
-}
-
-/* test_26: continue in do-while jumps to condition check */
-static int guscc_test_26(void)
-{
-    return compile_and_run("../test/files/test_26.c", "./test_26.s",
-                           "/tmp/guscc_test_26_out", 4);
-}
-
-/* test_fail_4: break outside loop */
-static int guscc_test_fail_4(void)
-{
-    int ret = run_test("../test/files/test_fail_4.c");
+    int ret = run_test("../test/files/fail_break_outside_loop.c");
     ASSERT(ret != 0);
     return 0;
 }
 
-/* test_fail_5: continue outside loop */
-static int guscc_test_fail_5(void)
+static int guscc_test_fail_continue_outside_loop(void)
 {
-    int ret = run_test("../test/files/test_fail_5.c");
+    int ret = run_test("../test/files/fail_continue_outside_loop.c");
     ASSERT(ret != 0);
     return 0;
-}
-
-/* test_27: for loop summing 1..5, return 15 */
-static int guscc_test_27(void)
-{
-    return compile_and_run("../test/files/test_27.c", "./test_27.s",
-                           "/tmp/guscc_test_27_out", 15);
-}
-
-/* test_28: for with continue, return 4 */
-static int guscc_test_28(void)
-{
-    return compile_and_run("../test/files/test_28.c", "./test_28.s",
-                           "/tmp/guscc_test_28_out", 4);
-}
-
-/* test_29: for with break, return 2 */
-static int guscc_test_29(void)
-{
-    return compile_and_run("../test/files/test_29.c", "./test_29.s",
-                           "/tmp/guscc_test_29_out", 2);
-}
-
-/* test_30: for with empty init and post, return 5 */
-static int guscc_test_30(void)
-{
-    return compile_and_run("../test/files/test_30.c", "./test_30.s",
-                           "/tmp/guscc_test_30_out", 5);
 }
 
 void guscc_test(void)
 {
     /* Original tests */
-    ut_run(guscc_test_1);
-    ut_run(guscc_test_2);
-    ut_run(guscc_test_3);
-    ut_run(guscc_test_4);
-    ut_run(guscc_test_5);
-    ut_run(guscc_test_6);
-    ut_run(guscc_test_7);
+    ut_run(guscc_test_return_literal);
+    ut_run(guscc_test_func_params_unused);
+    ut_run(guscc_test_unsupported_features);
+    ut_run(guscc_test_binary_ops);
+    ut_run(guscc_test_unary_ops);
+    ut_run(guscc_test_ternary);
+    ut_run(guscc_test_cast_and_sizeof);
 
-    /* Identifier / symbol table codegen */
-    ut_run(guscc_test_8);
-    ut_run(guscc_test_9);
-    ut_run(guscc_test_10);
+    /* Identifier / symbol table / locals */
+    ut_run(guscc_test_local_var_decl);
+    ut_run(guscc_test_local_var_initializer);
+    ut_run(guscc_test_multiple_locals);
 
     /* Function calls */
-    ut_run(guscc_test_11);
-    ut_run(guscc_test_14);
+    ut_run(guscc_test_func_call_int_params);
+    ut_run(guscc_test_nested_func_calls);
 
     /* Compound assignment, postfix ops */
-    ut_run(guscc_test_12);
-    ut_run(guscc_test_13);
+    ut_run(guscc_test_compound_assign);
+    ut_run(guscc_test_postfix_inc_dec);
 
     /* Pointers */
-    ut_run(guscc_test_15);
+    ut_run(guscc_test_pointer_ops);
 
     /* if/else */
-    ut_run(guscc_test_16);
-    ut_run(guscc_test_17);
-    ut_run(guscc_test_18);
+    ut_run(guscc_test_if_no_else);
+    ut_run(guscc_test_if_else);
+    ut_run(guscc_test_if_else_func_call);
 
     /* while */
-    ut_run(guscc_test_19);
-    ut_run(guscc_test_20);
+    ut_run(guscc_test_while_basic);
+    ut_run(guscc_test_while_func_call);
 
     /* break / continue */
-    ut_run(guscc_test_21);
-    ut_run(guscc_test_22);
-    ut_run(guscc_test_23);
+    ut_run(guscc_test_while_break);
+    ut_run(guscc_test_while_continue);
+    ut_run(guscc_test_while_nested_break);
 
     /* do-while */
-    ut_run(guscc_test_24);
-    ut_run(guscc_test_25);
-    ut_run(guscc_test_26);
+    ut_run(guscc_test_do_while_basic);
+    ut_run(guscc_test_do_while_false_cond);
+    ut_run(guscc_test_do_while_continue);
 
     /* for */
-    ut_run(guscc_test_fail_2); /* repurposed: basic for loop */
-    ut_run(guscc_test_27);
-    ut_run(guscc_test_28);
-    ut_run(guscc_test_29);
-    ut_run(guscc_test_30);
+    ut_run(guscc_test_for_expr_init);
+    ut_run(guscc_test_for_basic);
+    ut_run(guscc_test_for_continue);
+    ut_run(guscc_test_for_break);
+    ut_run(guscc_test_for_empty_clauses);
 
     /* Failure paths */
-    ut_run(guscc_test_fail_1);
-    ut_run(guscc_test_fail_3);
-    ut_run(guscc_test_fail_4);
-    ut_run(guscc_test_fail_5);
+    ut_run(guscc_test_fail_syntax_error);
+    ut_run(guscc_test_fail_undeclared_var);
+    ut_run(guscc_test_fail_break_outside_loop);
+    ut_run(guscc_test_fail_continue_outside_loop);
 }
