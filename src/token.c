@@ -44,6 +44,8 @@ void token_print(token_t *t)
         printf("CONTINUE ");
     } else if (type == TOKEN_KW_DO) {
         printf("DO ");
+    } else if (type == TOKEN_KW_FOR) {
+        printf("FOR ");
     } else if (type == TOKEN_KW_WHILE) {
         printf("WHILE ");
     } else if (type == TOKEN_KW_SIZEOF) {
@@ -106,6 +108,8 @@ const char *token_type_to_str(token_type_t type, char *str, size_t len)
         snprintf(str, len, "constant");
     } else if (type == TOKEN_KW_DO) {
         snprintf(str, len, "do");
+    } else if (type == TOKEN_KW_FOR) {
+        snprintf(str, len, "for");
     } else if (type == TOKEN_KW_SIZEOF) {
         snprintf(str, len, "sizeof");
     } else if (type == TOKEN_INC_OP) {

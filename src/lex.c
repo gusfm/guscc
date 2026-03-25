@@ -60,6 +60,8 @@ static token_type_t get_token_type(char *s, int len)
         return TOKEN_KW_CONTINUE;
     if (len == 2 && strncmp(s, "do", 2) == 0)
         return TOKEN_KW_DO;
+    if (len == 3 && strncmp(s, "for", 3) == 0)
+        return TOKEN_KW_FOR;
     return TOKEN_IDENT;
 }
 

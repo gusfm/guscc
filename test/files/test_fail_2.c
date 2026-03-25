@@ -1,4 +1,4 @@
-/* test_fail_2: for loop not yet implemented; guscc should exit non-zero */
+/* for loop: expression init, comparison cond, postfix post */
 int main()
 {
     int x;

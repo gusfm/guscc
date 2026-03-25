@@ -148,12 +148,11 @@ static int guscc_test_fail_1(void)
     return 0;
 }
 
-/* test_fail_2: unsupported 'for' loop — parser returns NULL */
+/* test_fail_2 (repurposed): for loop with expression init, returns 0 */
 static int guscc_test_fail_2(void)
 {
-    int ret = run_test("../test/files/test_fail_2.c");
-    ASSERT(ret != 0);
-    return 0;
+    return compile_and_run("../test/files/test_fail_2.c", "./test_fail_2.s",
+                           "/tmp/guscc_test_fail_2_out", 0);
 }
 
 /* test_16: if without else (no braces) */
@@ -257,6 +256,34 @@ static int guscc_test_fail_5(void)
     return 0;
 }
 
+/* test_27: for loop summing 1..5, return 15 */
+static int guscc_test_27(void)
+{
+    return compile_and_run("../test/files/test_27.c", "./test_27.s",
+                           "/tmp/guscc_test_27_out", 15);
+}
+
+/* test_28: for with continue, return 4 */
+static int guscc_test_28(void)
+{
+    return compile_and_run("../test/files/test_28.c", "./test_28.s",
+                           "/tmp/guscc_test_28_out", 4);
+}
+
+/* test_29: for with break, return 2 */
+static int guscc_test_29(void)
+{
+    return compile_and_run("../test/files/test_29.c", "./test_29.s",
+                           "/tmp/guscc_test_29_out", 2);
+}
+
+/* test_30: for with empty init and post, return 5 */
+static int guscc_test_30(void)
+{
+    return compile_and_run("../test/files/test_30.c", "./test_30.s",
+                           "/tmp/guscc_test_30_out", 5);
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -303,9 +330,15 @@ void guscc_test(void)
     ut_run(guscc_test_25);
     ut_run(guscc_test_26);
 
+    /* for */
+    ut_run(guscc_test_fail_2); /* repurposed: basic for loop */
+    ut_run(guscc_test_27);
+    ut_run(guscc_test_28);
+    ut_run(guscc_test_29);
+    ut_run(guscc_test_30);
+
     /* Failure paths */
     ut_run(guscc_test_fail_1);
-    ut_run(guscc_test_fail_2);
     ut_run(guscc_test_fail_3);
     ut_run(guscc_test_fail_4);
     ut_run(guscc_test_fail_5);

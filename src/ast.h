@@ -18,6 +18,7 @@ typedef enum {
     ND_IF_STMT,          // if (cond) then [else else_]
     ND_WHILE_STMT,       // while (cond) body
     ND_DO_WHILE_STMT,    // do body while (cond) ;
+    ND_FOR_STMT,         // for ( init ; cond ; post ) body
     ND_BREAK_STMT,       // break ;
     ND_CONTINUE_STMT,    // continue ;
     ND_RETURN_STMT,      // return [expr] ;
@@ -106,7 +107,14 @@ struct node {
         struct {
             node_t *cond;
             node_t *body;
-        } while_stmt; // used when kind == ND_WHILE_STMT
+        } while_stmt; // used when kind == ND_WHILE_STMT and ND_DO_WHILE_STMT
+
+        struct {
+            node_t *init; // ND_EXPR_STMT (expr may be NULL for empty init)
+            node_t *cond; // expression or NULL (empty cond → always true)
+            node_t *post; // expression or NULL (empty post → no increment)
+            node_t *body; // loop body statement
+        } for_stmt;       // used when kind == ND_FOR_STMT
 
         struct {
             node_t *expr; // NULL for bare return;

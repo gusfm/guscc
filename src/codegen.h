@@ -8,10 +8,10 @@ typedef struct {
     FILE *out;             // open output file (.s), owned by the caller
     const char *func_name; // points into AST buffer (not null-terminated)
     int func_name_len;
-    int label_count;      // monotonically increasing label counter
-    int errors;           // count of fatal errors (non-zero → codegen_exec returns -1)
-    int loop_label;       // label number of innermost loop, -1 if not in a loop
-    int loop_is_do_while; // 1 when innermost loop is do-while (continue → _cond), 0 otherwise
+    int label_count;    // monotonically increasing label counter
+    int errors;         // count of fatal errors (non-zero → codegen_exec returns -1)
+    int loop_label;     // label number of innermost loop, -1 if not in a loop
+    int loop_cont_kind; // continue target: 0=_start (while), 1=_cond (do-while), 2=_post (for)
 } codegen_t;
 
 void codegen_init(codegen_t *cg, FILE *out);
