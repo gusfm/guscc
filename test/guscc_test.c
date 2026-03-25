@@ -14,8 +14,8 @@ static int run_test(char *file)
 }
 
 /* Run guscc, assemble the output, execute and assert exit code == expected. */
-static int compile_and_run(const char *src, const char *asm_out,
-                           const char *bin_out, int expected_exit)
+static int compile_and_run(const char *src, const char *asm_out, const char *bin_out,
+                           int expected_exit)
 {
     char cmd[512];
     int ret;
@@ -25,8 +25,7 @@ static int compile_and_run(const char *src, const char *asm_out,
     if (ret != 0)
         return ret;
 
-    snprintf(cmd, sizeof(cmd), "gcc %s -o %s > /dev/null 2>&1", asm_out,
-             bin_out);
+    snprintf(cmd, sizeof(cmd), "gcc %s -o %s > /dev/null 2>&1", asm_out, bin_out);
     ret = system(cmd);
     ASSERT(ret == 0);
 
@@ -64,14 +63,13 @@ static int guscc_test_binary_ops(void)
 
 static int guscc_test_unary_ops(void)
 {
-    return compile_and_run("../test/files/unary_ops.c", "./unary_ops.s",
-                           "/tmp/guscc_unary_ops_out", 42);
+    return compile_and_run("../test/files/unary_ops.c", "./unary_ops.s", "/tmp/guscc_unary_ops_out",
+                           42);
 }
 
 static int guscc_test_ternary(void)
 {
-    return compile_and_run("../test/files/ternary.c", "./ternary.s",
-                           "/tmp/guscc_ternary_out", 42);
+    return compile_and_run("../test/files/ternary.c", "./ternary.s", "/tmp/guscc_ternary_out", 42);
 }
 
 static int guscc_test_cast_and_sizeof(void)
@@ -92,6 +90,12 @@ static int guscc_test_local_var_initializer(void)
 {
     return compile_and_run("../test/files/local_var_initializer.c", "./local_var_initializer.s",
                            "/tmp/guscc_local_var_initializer_out", 42);
+}
+
+static int guscc_test_local_var_shadowing(void)
+{
+    return compile_and_run("../test/files/local_var_shadowing.c", "./local_var_shadowing.s",
+                           "/tmp/guscc_local_var_shadowing_out", 10);
 }
 
 static int guscc_test_multiple_locals(void)
@@ -146,8 +150,7 @@ static int guscc_test_if_no_else(void)
 
 static int guscc_test_if_else(void)
 {
-    return compile_and_run("../test/files/if_else.c", "./if_else.s",
-                           "/tmp/guscc_if_else_out", 2);
+    return compile_and_run("../test/files/if_else.c", "./if_else.s", "/tmp/guscc_if_else_out", 2);
 }
 
 static int guscc_test_if_else_func_call(void)
@@ -220,8 +223,8 @@ static int guscc_test_for_expr_init(void)
 
 static int guscc_test_for_basic(void)
 {
-    return compile_and_run("../test/files/for_basic.c", "./for_basic.s",
-                           "/tmp/guscc_for_basic_out", 15);
+    return compile_and_run("../test/files/for_basic.c", "./for_basic.s", "/tmp/guscc_for_basic_out",
+                           15);
 }
 
 static int guscc_test_for_continue(void)
@@ -232,8 +235,8 @@ static int guscc_test_for_continue(void)
 
 static int guscc_test_for_break(void)
 {
-    return compile_and_run("../test/files/for_break.c", "./for_break.s",
-                           "/tmp/guscc_for_break_out", 2);
+    return compile_and_run("../test/files/for_break.c", "./for_break.s", "/tmp/guscc_for_break_out",
+                           2);
 }
 
 static int guscc_test_for_empty_clauses(void)
@@ -286,6 +289,7 @@ void guscc_test(void)
     /* Identifier / symbol table / locals */
     ut_run(guscc_test_local_var_decl);
     ut_run(guscc_test_local_var_initializer);
+    ut_run(guscc_test_local_var_shadowing);
     ut_run(guscc_test_multiple_locals);
 
     /* Function calls */
