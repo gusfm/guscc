@@ -1368,18 +1368,8 @@ node_t *parser_compound_statement(parser_t *p)
     return n;
 }
 
-node_t *parser_function_definition(parser_t *p)
+static node_t *parser_function_definition(parser_t *p, node_t *decl_spec, node_t *declarator)
 {
-    node_t *decl_spec = parser_declaration_specifiers(p);
-    if (decl_spec == NULL) {
-        return NULL;
-    }
-    node_t *declarator = parser_declarator(p);
-    if (declarator == NULL) {
-        node_destroy(decl_spec);
-        return NULL;
-    }
-
     // Set up symbol table scope for the function body
     p->frame_offset = 0;
     p->scope = scope_new(NULL);
@@ -1433,18 +1423,118 @@ node_t *parser_function_definition(parser_t *p)
     return node;
 }
 
+/*
+ * init_declarator
+ *  : declarator
+ *  | declarator '=' assignment_expression
+ *  ;
+ *
+ * declaration
+ *  : declaration_specifiers ';'
+ *  | declaration_specifiers init_declarator_list ';'
+ *  ;
+ */
+static node_t *parser_declaration_body(parser_t *p, node_t *decl_spec, node_t *declarator)
+{
+    node_t *init = NULL;
+    if (parser_accept(p, '=')) {
+        init = parser_assignment_expression(p);
+        if (init == NULL) {
+            node_destroy(decl_spec);
+            node_destroy(declarator);
+            return NULL;
+        }
+    }
+    if (!parser_expect(p, ';')) {
+        node_destroy(decl_spec);
+        node_destroy(declarator);
+        node_destroy(init);
+        return NULL;
+    }
+    node_t *n = node_create(ND_GLOBAL_DECL, decl_spec->line, decl_spec->col);
+    n->global_decl.decl_spec = decl_spec;
+    n->global_decl.declarator = declarator;
+    n->global_decl.init = init;
+    return n;
+}
+
+/*
+ * declaration
+ *  : declaration_specifiers ';'
+ *  | declaration_specifiers init_declarator_list ';'
+ *  ;
+ */
+node_t *parser_declaration(parser_t *p)
+{
+    node_t *decl_spec = parser_declaration_specifiers(p);
+    if (decl_spec == NULL)
+        return NULL;
+    if (parser_accept(p, ';')) {
+        node_t *n = node_create(ND_GLOBAL_DECL, decl_spec->line, decl_spec->col);
+        n->global_decl.decl_spec = decl_spec;
+        n->global_decl.declarator = NULL;
+        n->global_decl.init = NULL;
+        return n;
+    }
+    node_t *declarator = parser_declarator(p);
+    if (declarator == NULL) {
+        node_destroy(decl_spec);
+        return NULL;
+    }
+    return parser_declaration_body(p, decl_spec, declarator);
+}
+
+/*
+ * external_declaration
+ *  : function_definition
+ *  | declaration
+ *  ;
+ *
+ * Both alternatives start with declaration_specifiers declarator, so we parse
+ * the common prefix once and branch on the token that follows the declarator:
+ * '{' means a function body is next (function_definition); anything else is a
+ * declaration.
+ */
+node_t *parser_external_declaration(parser_t *p)
+{
+    node_t *decl_spec = parser_declaration_specifiers(p);
+    if (decl_spec == NULL)
+        return NULL;
+
+    node_t *declarator = parser_declarator(p);
+    if (declarator == NULL) {
+        node_destroy(decl_spec);
+        return NULL;
+    }
+
+    token_t *peek = parser_peek(p);
+    if (peek != NULL && peek->type == '{')
+        return parser_function_definition(p, decl_spec, declarator);
+    else
+        return parser_declaration_body(p, decl_spec, declarator);
+}
+
+/*
+ * translation_unit
+ *  : external_declaration
+ *  | translation_unit external_declaration
+ *  ;
+ */
 node_t *parser_translation_unit(parser_t *p)
 {
     node_t *tu = node_create(ND_TRANSLATION_UNIT, 0, 0);
     while (parser_peek(p) != NULL) {
-        node_t *func = parser_function_definition(p);
-        if (func == NULL) {
+        node_t *item = parser_external_declaration(p);
+        if (item == NULL) {
             node_destroy(tu);
             return NULL;
         }
-        tu->translation_unit.funcs[tu->translation_unit.nfuncs++] = func;
+        if (item->kind == ND_FUNC)
+            tu->translation_unit.funcs[tu->translation_unit.nfuncs++] = item;
+        else
+            tu->translation_unit.decls[tu->translation_unit.ndecls++] = item;
     }
-    if (tu->translation_unit.nfuncs == 0) {
+    if (tu->translation_unit.nfuncs == 0 && tu->translation_unit.ndecls == 0) {
         node_destroy(tu);
         return NULL;
     }

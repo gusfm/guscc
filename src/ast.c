@@ -20,6 +20,8 @@ void node_destroy(node_t *node)
         case ND_TRANSLATION_UNIT:
             for (int i = 0; i < node->translation_unit.nfuncs; i++)
                 node_destroy(node->translation_unit.funcs[i]);
+            for (int i = 0; i < node->translation_unit.ndecls; i++)
+                node_destroy(node->translation_unit.decls[i]);
             break;
         case ND_FUNC:
             node_destroy(node->func.decl_spec);
@@ -121,6 +123,11 @@ void node_destroy(node_t *node)
             node_destroy(node->local_decl.init);
             free(node->local_decl.sym);
             break;
+        case ND_GLOBAL_DECL:
+            node_destroy(node->global_decl.decl_spec);
+            node_destroy(node->global_decl.declarator);
+            node_destroy(node->global_decl.init);
+            break;
         case ND_TYPE_SPEC:
         case ND_NUM:
         case ND_IDENT:
@@ -210,9 +217,12 @@ void ast_print(node_t *n, int indent)
     }
     switch (n->kind) {
         case ND_TRANSLATION_UNIT:
-            printf("Translation unit: %d function(s)\n", n->translation_unit.nfuncs);
+            printf("Translation unit: %d function(s), %d declaration(s)\n",
+                   n->translation_unit.nfuncs, n->translation_unit.ndecls);
             for (int i = 0; i < n->translation_unit.nfuncs; i++)
                 ast_print(n->translation_unit.funcs[i], indent + 1);
+            for (int i = 0; i < n->translation_unit.ndecls; i++)
+                ast_print(n->translation_unit.decls[i], indent + 1);
             break;
         case ND_FUNC:
             printf("Function definition:%d:%d:\n", n->line, n->col);
@@ -379,6 +389,17 @@ void ast_print(node_t *n, int indent)
             ast_print(n->local_decl.decl_spec, indent + 1);
             if (n->local_decl.init)
                 ast_print(n->local_decl.init, indent + 1);
+            break;
+        case ND_GLOBAL_DECL:
+            if (n->global_decl.declarator)
+                printf("GlobalDecl:%d:%d: %.*s\n", n->line, n->col,
+                       n->global_decl.declarator->direct_decl.ident.len,
+                       n->global_decl.declarator->direct_decl.ident.str);
+            else
+                printf("GlobalDecl:%d:%d: (bare type)\n", n->line, n->col);
+            ast_print(n->global_decl.decl_spec, indent + 1);
+            if (n->global_decl.init)
+                ast_print(n->global_decl.init, indent + 1);
             break;
     }
 }
