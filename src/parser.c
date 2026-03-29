@@ -7,8 +7,16 @@
 #include "ast.h"
 #include "sym.h"
 
+// Declarator mode: controls whether an identifier is required, forbidden, or optional.
+typedef enum {
+    DECL_CONCRETE, // identifier required (function defs, local decls, struct members)
+    DECL_ABSTRACT, // identifier forbidden (type_name: casts, sizeof)
+    DECL_EITHER,   // identifier optional (parameter declarations)
+} decl_mode_t;
+
 // Forward declarations
 node_t *parser_declarator(parser_t *p);
+static node_t *parser_declarator_mode(parser_t *p, decl_mode_t mode);
 node_t *parser_compound_statement(parser_t *p);
 node_t *parser_statement(parser_t *p);
 node_t *parser_declaration_specifiers(parser_t *p);
@@ -285,14 +293,21 @@ node_t *parser_declaration_specifiers(parser_t *p)
 node_t *parser_parameter_declaration(parser_t *p)
 {
     node_t *decl_spec = parser_declaration_specifiers(p);
-    if (decl_spec == NULL) {
+    if (decl_spec == NULL)
         return NULL;
+
+    // If next token is ')' or ',' — no declarator (bare type specifier)
+    token_t *peek = parser_peek(p);
+    if (peek->type == ')' || peek->type == ',') {
+        node_t *n = node_create(ND_PARAM_DECL, decl_spec->line, decl_spec->col);
+        n->param_decl.decl_spec = decl_spec;
+        n->param_decl.declarator = NULL;
+        return n;
     }
-    node_t *declarator = parser_declarator(p);
-    if (declarator == NULL) {
-        node_destroy(decl_spec);
-        return NULL;
-    }
+
+    // Parse declarator (concrete or abstract)
+    node_t *declarator = parser_declarator_mode(p, DECL_EITHER);
+
     node_t *n = node_create(ND_PARAM_DECL, decl_spec->line, decl_spec->col);
     n->param_decl.decl_spec = decl_spec;
     n->param_decl.declarator = declarator;
@@ -319,33 +334,67 @@ node_t *parser_parameter_list(parser_t *p)
     return n;
 }
 
-node_t *parser_direct_declarator(parser_t *p)
+static node_t *parser_direct_declarator(parser_t *p, decl_mode_t mode)
 {
-    // Identifier
-    token_t *ident = parser_expect_token(p, TOKEN_IDENT);
-    if (ident == NULL) {
+    node_t *n;
+
+    if (parser_peek(p)->type == TOKEN_IDENT && mode != DECL_ABSTRACT) {
+        // Concrete path: consume identifier
+        token_t *ident = parser_expect_token(p, TOKEN_IDENT);
+        n = node_create(ND_DIRECT_DECL, ident->line, ident->col);
+        n->direct_decl.ident.str = ident->sval;
+        n->direct_decl.ident.len = ident->len;
+    } else if (mode == DECL_CONCRETE) {
+        // Must have identifier — emit error via expect_token
+        parser_expect_token(p, TOKEN_IDENT);
         return NULL;
+    } else {
+        // Abstract or Either with no identifier
+        token_t *tok = parser_peek(p);
+        n = node_create(ND_DIRECT_DECL, tok->line, tok->col);
+        n->direct_decl.ident.str = NULL;
+        n->direct_decl.ident.len = 0;
     }
-
-    node_t *n = node_create(ND_DIRECT_DECL, ident->line, ident->col);
-    n->direct_decl.ident.str = ident->sval;
-    n->direct_decl.ident.len = ident->len;
     n->direct_decl.param_list = NULL;
+    n->direct_decl.pointer_level = 0;
 
-    // Declarator
-    if (parser_accept(p, '(')) {
-        if (parser_accept(p, ')'))
-            return n;
-        node_t *param_list = parser_parameter_list(p);
-        if (!param_list) {
-            node_destroy(n);
-            return NULL;
+    // Suffix: optional '(' parameter_list ')' or grouping '(' abstract_declarator ')'
+    if (parser_peek(p)->type == '(') {
+        token_t *p2 = parser_peek2(p);
+        bool is_grouping = (p2 != NULL && p2->type == '*');
+
+        if (is_grouping && mode != DECL_CONCRETE) {
+            // Grouping: '(' abstract_declarator ')'
+            token_t *lp = parser_next(p); // consume '('
+            token_destroy(lp);
+            node_t *inner = parser_declarator_mode(p, mode);
+            if (!inner || !parser_expect(p, ')')) {
+                node_destroy(n);
+                node_destroy(inner);
+                return NULL;
+            }
+            // Merge pointer levels from inner declarator
+            n->direct_decl.pointer_level += inner->direct_decl.pointer_level;
+            node_destroy(inner);
+            // After grouping, check for trailing '(' param_list ')' suffix
+            if (parser_peek(p)->type != '(')
+                return n;
         }
-        if (!parser_expect(p, ')')) {
-            node_destroy(n);
-            return NULL;
+
+        if (parser_accept(p, '(')) {
+            if (parser_accept(p, ')'))
+                return n;
+            node_t *param_list = parser_parameter_list(p);
+            if (!param_list) {
+                node_destroy(n);
+                return NULL;
+            }
+            if (!parser_expect(p, ')')) {
+                node_destroy(n);
+                return NULL;
+            }
+            n->direct_decl.param_list = param_list;
         }
-        n->direct_decl.param_list = param_list;
     }
     return n;
 }
@@ -353,31 +402,46 @@ node_t *parser_direct_declarator(parser_t *p)
 int parser_pointer(parser_t *p)
 {
     int pointer_level = 0;
-    if (!parser_expect(p, '*'))
-        return pointer_level;
-    ++pointer_level;
-    while (1) {
-        if (!parser_accept(p, '*'))
-            return pointer_level;
-        ++pointer_level;
-    }
+    while (parser_accept(p, '*'))
+        pointer_level++;
     return pointer_level;
 }
 
-node_t *parser_declarator(parser_t *p)
+static node_t *parser_declarator_mode(parser_t *p, decl_mode_t mode)
 {
     int pointer_level = 0;
     if (parser_peek(p)->type == '*') {
         pointer_level = parser_pointer(p);
-        if (pointer_level <= 0) {
+        if (pointer_level <= 0)
             return NULL;
+    }
+
+    // In abstract/either mode, pointer alone (no direct part) is valid.
+    // A direct_abstract_declarator starts with '(' or '['; TOKEN_IDENT starts a concrete one.
+    if (mode != DECL_CONCRETE) {
+        token_t *peek = parser_peek(p);
+        if (peek->type != '(' && peek->type != '[' && peek->type != TOKEN_IDENT) {
+            if (pointer_level == 0)
+                return NULL; // nothing was parsed
+            node_t *n = node_create(ND_DIRECT_DECL, peek->line, peek->col);
+            n->direct_decl.ident.str = NULL;
+            n->direct_decl.ident.len = 0;
+            n->direct_decl.pointer_level = pointer_level;
+            n->direct_decl.param_list = NULL;
+            return n;
         }
     }
-    node_t *n = parser_direct_declarator(p);
+
+    node_t *n = parser_direct_declarator(p, mode);
     if (n == NULL)
         return NULL;
-    n->direct_decl.pointer_level = pointer_level;
+    n->direct_decl.pointer_level += pointer_level;
     return n;
+}
+
+node_t *parser_declarator(parser_t *p)
+{
+    return parser_declarator_mode(p, DECL_CONCRETE);
 }
 
 static bool parser_is_type_token(token_type_t type)
@@ -470,16 +534,24 @@ static node_t *parser_local_declaration(parser_t *p)
     return n;
 }
 
-// Parse a type name for cast / sizeof: declaration_specifiers + optional '*'*
+// Parse a type name for cast / sizeof: declaration_specifiers + optional abstract_declarator
 static node_t *parser_type_name(parser_t *p)
 {
     node_t *decl_spec = parser_declaration_specifiers(p);
     if (decl_spec == NULL)
         return NULL;
-    int pointer_level = 0;
-    while (parser_accept(p, '*'))
-        pointer_level++;
-    decl_spec->decl_spec.pointer_level = pointer_level;
+
+    // Parse optional abstract declarator (starts with '*', '(', or '[')
+    token_t *peek = parser_peek(p);
+    if (peek->type == '*' || peek->type == '(' || peek->type == '[') {
+        node_t *abs_decl = parser_declarator_mode(p, DECL_ABSTRACT);
+        if (abs_decl == NULL) {
+            node_destroy(decl_spec);
+            return NULL;
+        }
+        decl_spec->decl_spec.pointer_level = abs_decl->direct_decl.pointer_level;
+        node_destroy(abs_decl);
+    }
     return decl_spec;
 }
 
@@ -1570,6 +1642,16 @@ static node_t *parser_function_definition(parser_t *p, node_t *decl_spec, node_t
     if (param_list != NULL) {
         for (int i = 0; i < param_list->param_list.nparams; i++) {
             node_t *pd = param_list->param_list.params[i];
+            if (pd->param_decl.declarator == NULL ||
+                pd->param_decl.declarator->direct_decl.ident.str == NULL) {
+                fprintf(stderr, "%d:%d: error: parameter name omitted in function definition\n",
+                        pd->line, pd->col);
+                scope_free(p->scope);
+                p->scope = NULL;
+                node_destroy(decl_spec);
+                node_destroy(declarator);
+                return NULL;
+            }
             int ptr_lvl = pd->param_decl.declarator->direct_decl.pointer_level;
             int size = parser_sym_size(pd->param_decl.decl_spec, ptr_lvl);
             p->frame_offset = parser_align_down(p->frame_offset - size, size < 8 ? size : 8);

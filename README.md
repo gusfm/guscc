@@ -1,6 +1,6 @@
 # guscc
 
-A simple recursive-descent C compiler written in C99, aimed at eventual self-hosting. It supports a limited subset of C: `void`/`char`/`int` types, structs with member access (`.` and `->`), multiple functions per file, local variables, parameters, assignments, function calls, `if`/`else`, `while`, `do-while`, `for`, `break`, `continue`, `return`, and expressions.
+A simple recursive-descent C compiler written in C99, aimed at eventual self-hosting. It supports a limited subset of C: `void`/`char`/`int` types, structs with member access (`.` and `->`), multiple functions per file, local variables, parameters (including unnamed parameters in declarations), assignments, function calls, `if`/`else`, `while`, `do-while`, `for`, `break`, `continue`, `return`, and expressions.
 
 Given a C source file, `guscc` compiles it to x86-64 assembly (`.s`). By default only errors are printed to stderr. Pass `-d` to also print three debug sections to stdout: source with line numbers, the lexer token stream, and the parser AST.
 
@@ -67,6 +67,7 @@ Parameters are assigned negative `%rbp` offsets in declaration order (first para
 
 - Array subscript (`a[i]`) is parsed but not yet implemented in codegen
 - Only named struct definitions; no anonymous structs, no nested struct types, no struct assignment
-- Forward function calls (callee defined later in the file) produce an "undeclared identifier" warning; prototype declarations are not yet supported
+- Forward function calls (callee defined later in the file) produce an "undeclared identifier" warning; forward declarations with unnamed parameters are supported
+- Parenthesized abstract declarators (function pointer syntax like `int (*)(int)`) are parsed but not code-generated
 - Global variable declarations are not yet supported
 - Only up to 6 integer parameters (System V AMD64 ABI register arguments)

@@ -260,8 +260,9 @@ static void cg_cast(codegen_t *cg, node_t *n)
 {
     cg_expr(cg, n->cast.expr);
     node_t *ds = n->cast.type_node;
-    if (ds && ds->kind == ND_DECL_SPEC && ds->decl_spec.pointer_level == 0 && ds->decl_spec.type_spec &&
-        ds->decl_spec.type_spec->kind == ND_TYPE_SPEC && ds->decl_spec.type_spec->type_spec == ND_TYPE_CHAR) {
+    if (ds && ds->kind == ND_DECL_SPEC && ds->decl_spec.pointer_level == 0 &&
+        ds->decl_spec.type_spec && ds->decl_spec.type_spec->kind == ND_TYPE_SPEC &&
+        ds->decl_spec.type_spec->type_spec == ND_TYPE_CHAR) {
         fprintf(cg->out, "\tmovsbl\t%%al, %%eax\n");
     }
 }
@@ -766,7 +767,11 @@ static void cg_func(codegen_t *cg, node_t *n)
         // Walk params_sym_list (reverse) and match by name
         for (int i = 0; i < nparams && i < 8; i++) {
             node_t *pd = param_list->param_list.params[i];
+            if (pd->param_decl.declarator == NULL)
+                continue;
             node_str_t pname = pd->param_decl.declarator->direct_decl.ident;
+            if (pname.str == NULL)
+                continue;
             for (sym_t *s = n->func.params_sym_list; s != NULL; s = s->next) {
                 if (s->name_len == pname.len &&
                     memcmp(s->name, pname.str, (size_t)pname.len) == 0) {

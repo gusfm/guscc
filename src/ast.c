@@ -257,8 +257,11 @@ void ast_print(node_t *n, int indent)
             break;
         case ND_DIRECT_DECL:
             printf("Direct declarator:%d:%d: ", n->line, n->col);
-            printf("%.*s pointer_level=%d\n", n->direct_decl.ident.len, n->direct_decl.ident.str,
-                   n->direct_decl.pointer_level);
+            if (n->direct_decl.ident.str)
+                printf("%.*s pointer_level=%d\n", n->direct_decl.ident.len,
+                       n->direct_decl.ident.str, n->direct_decl.pointer_level);
+            else
+                printf("(abstract) pointer_level=%d\n", n->direct_decl.pointer_level);
             if (n->direct_decl.param_list) {
                 ast_print(n->direct_decl.param_list, indent + 1);
             }

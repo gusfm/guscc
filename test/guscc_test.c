@@ -282,6 +282,28 @@ static int guscc_test_fail_struct_no_body(void)
     return 0;
 }
 
+static int guscc_test_unnamed_params(void)
+{
+    return compile_and_run("../test/files/unnamed_params.c", 42);
+}
+
+static int guscc_test_abstract_decl_sizeof(void)
+{
+    return compile_and_run("../test/files/abstract_decl_sizeof.c", 16);
+}
+
+static int guscc_test_abstract_decl_cast(void)
+{
+    return compile_and_run("../test/files/abstract_decl_cast.c", 42);
+}
+
+static int guscc_test_fail_unnamed_param_def(void)
+{
+    int ret = compile_file("../test/files/fail_unnamed_param_def.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -342,10 +364,16 @@ void guscc_test(void)
     ut_run(guscc_test_struct_sizeof);
     ut_run(guscc_test_struct_mixed_types);
 
+    /* Abstract declarators / unnamed params */
+    ut_run(guscc_test_unnamed_params);
+    ut_run(guscc_test_abstract_decl_sizeof);
+    ut_run(guscc_test_abstract_decl_cast);
+
     /* Failure paths */
     ut_run(guscc_test_fail_syntax_error);
     ut_run(guscc_test_fail_undeclared_var);
     ut_run(guscc_test_fail_break_outside_loop);
     ut_run(guscc_test_fail_continue_outside_loop);
     ut_run(guscc_test_fail_struct_no_body);
+    ut_run(guscc_test_fail_unnamed_param_def);
 }
