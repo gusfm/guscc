@@ -257,10 +257,18 @@ void ast_print(node_t *n, int indent)
             break;
         case ND_DIRECT_DECL:
             printf("Direct declarator:%d:%d: ", n->line, n->col);
-            if (n->direct_decl.ident.str)
-                printf("%.*s pointer_level=%d\n", n->direct_decl.ident.len,
-                       n->direct_decl.ident.str, n->direct_decl.pointer_level);
-            else
+            if (n->direct_decl.ident.str) {
+                if (n->direct_decl.array_size > 0)
+                    printf("%.*s[%d] pointer_level=%d\n", n->direct_decl.ident.len,
+                           n->direct_decl.ident.str, n->direct_decl.array_size,
+                           n->direct_decl.pointer_level);
+                else if (n->direct_decl.array_size < 0)
+                    printf("%.*s[] pointer_level=%d\n", n->direct_decl.ident.len,
+                           n->direct_decl.ident.str, n->direct_decl.pointer_level);
+                else
+                    printf("%.*s pointer_level=%d\n", n->direct_decl.ident.len,
+                           n->direct_decl.ident.str, n->direct_decl.pointer_level);
+            } else
                 printf("(abstract) pointer_level=%d\n", n->direct_decl.pointer_level);
             if (n->direct_decl.param_list) {
                 ast_print(n->direct_decl.param_list, indent + 1);
@@ -391,15 +399,23 @@ void ast_print(node_t *n, int indent)
             ast_print(n->comma.left, indent + 1);
             ast_print(n->comma.right, indent + 1);
             break;
-        case ND_LOCAL_DECL:
-            printf("LocalDecl:%d:%d: %.*s (offset=%d)\n", n->line, n->col,
-                   n->local_decl.declarator->direct_decl.ident.len,
-                   n->local_decl.declarator->direct_decl.ident.str,
-                   n->local_decl.sym ? n->local_decl.sym->offset : 0);
+        case ND_LOCAL_DECL: {
+            int arr = n->local_decl.declarator->direct_decl.array_size;
+            if (arr > 0)
+                printf("LocalDecl:%d:%d: %.*s[%d] (offset=%d)\n", n->line, n->col,
+                       n->local_decl.declarator->direct_decl.ident.len,
+                       n->local_decl.declarator->direct_decl.ident.str, arr,
+                       n->local_decl.sym ? n->local_decl.sym->offset : 0);
+            else
+                printf("LocalDecl:%d:%d: %.*s (offset=%d)\n", n->line, n->col,
+                       n->local_decl.declarator->direct_decl.ident.len,
+                       n->local_decl.declarator->direct_decl.ident.str,
+                       n->local_decl.sym ? n->local_decl.sym->offset : 0);
             ast_print(n->local_decl.decl_spec, indent + 1);
             if (n->local_decl.init)
                 ast_print(n->local_decl.init, indent + 1);
             break;
+        }
         case ND_GLOBAL_DECL:
             if (n->global_decl.declarator)
                 printf("GlobalDecl:%d:%d: %.*s\n", n->line, n->col,

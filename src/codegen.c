@@ -11,6 +11,8 @@ static void cg_node(codegen_t *cg, node_t *n);
 static void cg_expr(codegen_t *cg, node_t *n);
 static void cg_member_addr(codegen_t *cg, node_t *n);
 static void cg_member(codegen_t *cg, node_t *n);
+static void cg_subscript_addr(codegen_t *cg, node_t *n);
+static void cg_subscript(codegen_t *cg, node_t *n);
 
 // x86-64 System V ABI integer argument registers (64-bit / 32-bit / 8-bit)
 static const char *arg_regs64[6] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
@@ -209,6 +211,8 @@ static void cg_unop(codegen_t *cg, node_t *n)
             fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", operand->ident.sym->offset);
         } else if (operand->kind == ND_MEMBER) {
             cg_member_addr(cg, operand);
+        } else if (operand->kind == ND_SUBSCRIPT) {
+            cg_subscript_addr(cg, operand);
         } else {
             fprintf(stderr, "codegen: & applied to non-addressable operand\n");
         }
@@ -341,6 +345,8 @@ static void cg_lvalue_addr(codegen_t *cg, node_t *n)
         cg_expr(cg, n->unop.operand);
     } else if (n->kind == ND_MEMBER) {
         cg_member_addr(cg, n);
+    } else if (n->kind == ND_SUBSCRIPT) {
+        cg_subscript_addr(cg, n);
     } else {
         fprintf(stderr, "codegen: unsupported lvalue kind %d\n", n->kind);
     }
@@ -363,6 +369,8 @@ static void cg_load_lvalue(codegen_t *cg, node_t *n)
         fprintf(cg->out, "\tmovl\t(%%rax), %%eax\n");
     } else if (n->kind == ND_MEMBER) {
         cg_member(cg, n);
+    } else if (n->kind == ND_SUBSCRIPT) {
+        cg_subscript(cg, n);
     } else {
         cg_expr(cg, n); // fallback: evaluate as expression
     }
@@ -395,6 +403,20 @@ static void cg_store_to_lvalue(codegen_t *cg, node_t *lhs)
         } else {
             fprintf(cg->out, "\tmovl\t%%eax, (%%rcx)\n");
         }
+    } else if (lhs->kind == ND_SUBSCRIPT) {
+        int elem_size = 4;
+        if (lhs->subscript.array->kind == ND_IDENT && lhs->subscript.array->ident.sym)
+            elem_size = sym_get_size(lhs->subscript.array->ident.sym);
+        fprintf(cg->out, "\tpushq\t%%rax\n");
+        cg_subscript_addr(cg, lhs); // address → %rax
+        fprintf(cg->out, "\tmovq\t%%rax, %%rcx\n");
+        fprintf(cg->out, "\tpopq\t%%rax\n");
+        if (elem_size == 8)
+            fprintf(cg->out, "\tmovq\t%%rax, (%%rcx)\n");
+        else if (elem_size == 1)
+            fprintf(cg->out, "\tmovb\t%%al, (%%rcx)\n");
+        else
+            fprintf(cg->out, "\tmovl\t%%eax, (%%rcx)\n");
     } else {
         // General lvalue: save value, compute address, restore, store
         fprintf(cg->out, "\tpushq\t%%rax\n");
@@ -438,6 +460,54 @@ static void cg_member(codegen_t *cg, node_t *n)
         fprintf(cg->out, "\tmovl\t(%%rax), %%eax\n");
 }
 
+// Compute address of array[index] into %rax
+static void cg_subscript_addr(codegen_t *cg, node_t *n)
+{
+    node_t *arr = n->subscript.array;
+    node_t *idx = n->subscript.index;
+
+    // Determine element size
+    int elem_size = 4;
+    if (arr->kind == ND_IDENT && arr->ident.sym)
+        elem_size = sym_get_size(arr->ident.sym);
+
+    // Step 1: compute scaled index → %rcx
+    cg_expr(cg, idx);                                         // index → %eax
+    fprintf(cg->out, "\tmovslq\t%%eax, %%rcx\n");            // sign-extend to 64-bit
+    if (elem_size != 1)
+        fprintf(cg->out, "\timulq\t$%d, %%rcx\n", elem_size); // scale
+
+    // Step 2: compute base address → %rax
+    if (arr->kind == ND_IDENT && arr->ident.sym && arr->ident.sym->array_size > 0) {
+        // Local array: base is stack slot
+        fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", arr->ident.sym->offset);
+    } else {
+        // Pointer: evaluate to get pointer value (may clobber %rcx, so save it first)
+        fprintf(cg->out, "\tpushq\t%%rcx\n");
+        cg_expr(cg, arr);  // pointer value → %rax
+        fprintf(cg->out, "\tpopq\t%%rcx\n");
+    }
+
+    // Step 3: address = base + scaled index
+    fprintf(cg->out, "\taddq\t%%rcx, %%rax\n");
+}
+
+// Load value at array[index] into %rax/%eax
+static void cg_subscript(codegen_t *cg, node_t *n)
+{
+    int elem_size = 4;
+    if (n->subscript.array->kind == ND_IDENT && n->subscript.array->ident.sym)
+        elem_size = sym_get_size(n->subscript.array->ident.sym);
+
+    cg_subscript_addr(cg, n); // address → %rax
+    if (elem_size == 8)
+        fprintf(cg->out, "\tmovq\t(%%rax), %%rax\n");
+    else if (elem_size == 1)
+        fprintf(cg->out, "\tmovsbl\t(%%rax), %%eax\n");
+    else
+        fprintf(cg->out, "\tmovl\t(%%rax), %%eax\n");
+}
+
 // Map compound assignment operator to its base binary op token
 static int compound_base_op(int op)
 {
@@ -476,7 +546,12 @@ static void cg_ident(codegen_t *cg, node_t *n)
         fprintf(cg->out, "\txorl\t%%eax, %%eax\n");
         return;
     }
-    cg_load_sym(cg, n->ident.sym);
+    if (n->ident.sym->array_size > 0) {
+        // Array decays to pointer: yield base address of first element
+        fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", n->ident.sym->offset);
+    } else {
+        cg_load_sym(cg, n->ident.sym);
+    }
 }
 
 static void cg_assign(codegen_t *cg, node_t *n)
@@ -602,6 +677,20 @@ static void cg_expr(codegen_t *cg, node_t *n)
         case ND_MEMBER:
             cg_member(cg, n);
             break;
+        case ND_SUBSCRIPT:
+            cg_subscript(cg, n);
+            break;
+        case ND_SIZEOF_EXPR: {
+            int size = 4;
+            node_t *expr = n->sizeof_expr.expr;
+            if (expr->kind == ND_IDENT && expr->ident.sym) {
+                sym_t *sym = expr->ident.sym;
+                int elem = sym_get_size(sym);
+                size = (sym->array_size > 0) ? elem * sym->array_size : elem;
+            }
+            fprintf(cg->out, "\tmovl\t$%d, %%eax\n", size);
+            break;
+        }
         default:
             fprintf(stderr, "codegen: unsupported expression kind %d\n", n->kind);
             break;

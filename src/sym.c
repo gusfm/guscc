@@ -26,13 +26,14 @@ void sym_destroy_list(sym_t *sym)
 }
 
 sym_t *scope_define(scope_t *scope, const char *name, int name_len, node_t *decl_spec,
-                    int pointer_level, int offset)
+                    int pointer_level, int array_size, int offset)
 {
     sym_t *s = malloc(sizeof(sym_t));
     s->name = name;
     s->name_len = name_len;
     s->decl_spec = decl_spec;
     s->pointer_level = pointer_level;
+    s->array_size = array_size;
     s->offset = offset;
     s->next = scope->syms;
     scope->syms = s;

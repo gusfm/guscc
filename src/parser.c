@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "ast.h"
 #include "sym.h"
@@ -357,6 +358,41 @@ static node_t *parser_direct_declarator(parser_t *p, decl_mode_t mode)
     }
     n->direct_decl.param_list = NULL;
     n->direct_decl.pointer_level = 0;
+    n->direct_decl.array_size = 0;
+
+    // Array dimension suffix: '[' constant_expression ']' or '[' ']'
+    if (parser_peek(p)->type == '[') {
+        token_t *lb = parser_next(p); // consume '['
+        token_destroy(lb);
+        if (parser_peek(p)->type == ']') {
+            token_t *rb = parser_next(p); // consume ']'
+            token_destroy(rb);
+            n->direct_decl.array_size = -1; // unsized — valid only for params
+        } else {
+            node_t *size_expr = parser_assignment_expression(p);
+            if (size_expr == NULL) {
+                node_destroy(n);
+                return NULL;
+            }
+            if (size_expr->kind != ND_NUM) {
+                fprintf(stderr, "%d:%d: error: array size must be an integer constant\n",
+                        size_expr->line, size_expr->col);
+                node_destroy(size_expr);
+                node_destroy(n);
+                return NULL;
+            }
+            char tmp[32];
+            int len = size_expr->num.val.len < 31 ? size_expr->num.val.len : 31;
+            memcpy(tmp, size_expr->num.val.str, (size_t)len);
+            tmp[len] = '\0';
+            n->direct_decl.array_size = (int)strtol(tmp, NULL, 10);
+            node_destroy(size_expr);
+            if (!parser_expect(p, ']')) {
+                node_destroy(n);
+                return NULL;
+            }
+        }
+    }
 
     // Suffix: optional '(' parameter_list ')' or grouping '(' abstract_declarator ')'
     if (parser_peek(p)->type == '(') {
@@ -427,6 +463,7 @@ static node_t *parser_declarator_mode(parser_t *p, decl_mode_t mode)
             n->direct_decl.ident.str = NULL;
             n->direct_decl.ident.len = 0;
             n->direct_decl.pointer_level = pointer_level;
+            n->direct_decl.array_size = 0;
             n->direct_decl.param_list = NULL;
             return n;
         }
@@ -495,19 +532,32 @@ static node_t *parser_local_declaration(parser_t *p)
     }
 
     int pointer_level = declarator->direct_decl.pointer_level;
-    int size = parser_sym_size(decl_spec, pointer_level);
-    int align = size < 8 ? size : 8;
+    int array_size = declarator->direct_decl.array_size;
+    int elem_size = parser_sym_size(decl_spec, pointer_level);
+    int total_size;
+    if (array_size > 0) {
+        total_size = elem_size * array_size;
+    } else if (array_size == -1) {
+        fprintf(stderr, "%d:%d: error: array size missing in declaration\n",
+                declarator->line, declarator->col);
+        node_destroy(decl_spec);
+        node_destroy(declarator);
+        return NULL;
+    } else {
+        total_size = elem_size;
+    }
+    int align = elem_size < 8 ? elem_size : 8;
     if (pointer_level == 0 && decl_spec->decl_spec.type_spec &&
         decl_spec->decl_spec.type_spec->kind == ND_STRUCT_SPEC) {
         struct_def_t *def = decl_spec->decl_spec.type_spec->struct_spec.def;
         if (def)
             align = def->align;
     }
-    p->frame_offset = parser_align_down(p->frame_offset - size, align);
+    p->frame_offset = parser_align_down(p->frame_offset - total_size, align);
 
     sym_t *sym =
         scope_define(p->scope, declarator->direct_decl.ident.str, declarator->direct_decl.ident.len,
-                     decl_spec, pointer_level, p->frame_offset);
+                     decl_spec, pointer_level, array_size, p->frame_offset);
 
     node_t *init = NULL;
     if (parser_accept(p, '=')) {
@@ -1653,11 +1703,17 @@ static node_t *parser_function_definition(parser_t *p, node_t *decl_spec, node_t
                 return NULL;
             }
             int ptr_lvl = pd->param_decl.declarator->direct_decl.pointer_level;
+            int arr_sz = pd->param_decl.declarator->direct_decl.array_size;
+            // Array parameters decay to pointers per C standard
+            if (arr_sz != 0) {
+                ptr_lvl += 1;
+                arr_sz = 0;
+            }
             int size = parser_sym_size(pd->param_decl.decl_spec, ptr_lvl);
             p->frame_offset = parser_align_down(p->frame_offset - size, size < 8 ? size : 8);
             scope_define(p->scope, pd->param_decl.declarator->direct_decl.ident.str,
                          pd->param_decl.declarator->direct_decl.ident.len, pd->param_decl.decl_spec,
-                         ptr_lvl, p->frame_offset);
+                         ptr_lvl, arr_sz, p->frame_offset);
         }
     }
 
@@ -1691,7 +1747,7 @@ static node_t *parser_function_definition(parser_t *p, node_t *decl_spec, node_t
     // to this function after its definition resolve without a warning.
     node_str_t fname = declarator->direct_decl.ident;
     scope_define(p->func_scope, fname.str, fname.len, decl_spec,
-                 declarator->direct_decl.pointer_level, 0);
+                 declarator->direct_decl.pointer_level, 0, 0);
 
     return node;
 }

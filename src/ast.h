@@ -101,6 +101,7 @@ struct node {
         struct {
             node_str_t ident;   // function or variable name
             int pointer_level;  // number of leading '*' stars
+            int array_size;     // 0 = not array, positive = element count, -1 = unsized ([])
             node_t *param_list; // NULL for non-function declarators
         } direct_decl;          // used when kind == ND_DIRECT_DECL
 

@@ -304,6 +304,38 @@ static int guscc_test_fail_unnamed_param_def(void)
     return 0;
 }
 
+static int guscc_test_array_basic(void)
+{
+    return compile_and_run("../test/files/array_basic.c", 42);
+}
+
+static int guscc_test_array_char(void)
+{
+    return compile_and_run("../test/files/array_char.c", 65);
+}
+
+static int guscc_test_array_pointer(void)
+{
+    return compile_and_run("../test/files/array_pointer.c", 42);
+}
+
+static int guscc_test_array_sizeof(void)
+{
+    return compile_and_run("../test/files/array_sizeof.c", 40);
+}
+
+static int guscc_test_array_param(void)
+{
+    return compile_and_run("../test/files/array_param.c", 42);
+}
+
+static int guscc_test_fail_array_unsized(void)
+{
+    int ret = compile_file("../test/files/fail_array_unsized.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -369,6 +401,13 @@ void guscc_test(void)
     ut_run(guscc_test_abstract_decl_sizeof);
     ut_run(guscc_test_abstract_decl_cast);
 
+    /* Arrays */
+    ut_run(guscc_test_array_basic);
+    ut_run(guscc_test_array_char);
+    ut_run(guscc_test_array_pointer);
+    ut_run(guscc_test_array_sizeof);
+    ut_run(guscc_test_array_param);
+
     /* Failure paths */
     ut_run(guscc_test_fail_syntax_error);
     ut_run(guscc_test_fail_undeclared_var);
@@ -376,4 +415,5 @@ void guscc_test(void)
     ut_run(guscc_test_fail_continue_outside_loop);
     ut_run(guscc_test_fail_struct_no_body);
     ut_run(guscc_test_fail_unnamed_param_def);
+    ut_run(guscc_test_fail_array_unsized);
 }

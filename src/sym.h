@@ -9,7 +9,8 @@ typedef struct sym {
     int name_len;
     node_t *decl_spec; /* ND_DECL_SPEC node describing the type */
     int pointer_level;
-    int offset;       /* negative offset from %rbp, e.g. -4, -8 */
+    int array_size;  /* 0 = not array, positive = element count */
+    int offset;      /* negative offset from %rbp (base of array for arrays) */
     struct sym *next; /* next symbol in the same scope */
 } sym_t;
 
@@ -51,7 +52,7 @@ void sym_destroy_list(sym_t *sym);
 
 /* Define a new symbol in scope. Prepends to scope->syms. Returns the entry. */
 sym_t *scope_define(scope_t *scope, const char *name, int name_len, node_t *decl_spec,
-                    int pointer_level, int offset);
+                    int pointer_level, int array_size, int offset);
 
 /* Look up name walking the parent scope chain. Returns NULL if not found. */
 sym_t *scope_lookup(scope_t *scope, const char *name, int name_len);
