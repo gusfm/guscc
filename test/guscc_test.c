@@ -329,6 +329,26 @@ static int guscc_test_array_param(void)
     return compile_and_run("../test/files/array_param.c", 42);
 }
 
+static int guscc_test_array_string(void)
+{
+    return compile_and_run("../test/files/array_string.c", 1);
+}
+
+static int guscc_test_array_init_int(void)
+{
+    return compile_and_run("../test/files/array_init_int.c", 42);
+}
+
+static int guscc_test_array_init_partial(void)
+{
+    return compile_and_run("../test/files/array_init_partial.c", 10);
+}
+
+static int guscc_test_array_init_char(void)
+{
+    return compile_and_run("../test/files/array_init_char.c", 65);
+}
+
 static int guscc_test_fail_array_unsized(void)
 {
     int ret = compile_file("../test/files/fail_array_unsized.c");
@@ -407,6 +427,10 @@ void guscc_test(void)
     ut_run(guscc_test_array_pointer);
     ut_run(guscc_test_array_sizeof);
     ut_run(guscc_test_array_param);
+    ut_run(guscc_test_array_string);
+    ut_run(guscc_test_array_init_int);
+    ut_run(guscc_test_array_init_partial);
+    ut_run(guscc_test_array_init_char);
 
     /* Failure paths */
     ut_run(guscc_test_fail_syntax_error);

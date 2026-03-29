@@ -13,6 +13,10 @@ static void cg_member_addr(codegen_t *cg, node_t *n);
 static void cg_member(codegen_t *cg, node_t *n);
 static void cg_subscript_addr(codegen_t *cg, node_t *n);
 static void cg_subscript(codegen_t *cg, node_t *n);
+static void cg_str(codegen_t *cg, node_t *n);
+static void cg_zero_array(codegen_t *cg, int base, int total);
+static void cg_array_init_str(codegen_t *cg, sym_t *sym, node_t *n);
+static void cg_array_init_list(codegen_t *cg, sym_t *sym, node_t *n);
 
 // x86-64 System V ABI integer argument registers (64-bit / 32-bit / 8-bit)
 static const char *arg_regs64[6] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
@@ -41,6 +45,32 @@ static int sym_get_size(sym_t *sym)
     return 4;
 }
 
+// Return the byte size of one subscript element for a sym.
+// For arrays (pointer_level==0): returns the base element size via sym_get_size.
+// For pointers (pointer_level>0): returns the pointee size (not the pointer size itself).
+static int sym_elem_size(sym_t *sym)
+{
+    if (sym->pointer_level > 1)
+        return 8; // pointer-to-pointer: element is a pointer (8 bytes)
+    if (sym->pointer_level == 1) {
+        // pointer to base type: element size is the base type size
+        if (sym->decl_spec == NULL || sym->decl_spec->decl_spec.type_spec == NULL)
+            return 4;
+        node_t *ts = sym->decl_spec->decl_spec.type_spec;
+        if (ts->kind == ND_STRUCT_SPEC) {
+            struct_def_t *def = ts->struct_spec.def;
+            return def ? def->size : 4;
+        }
+        switch (ts->type_spec) {
+            case ND_TYPE_CHAR: return 1;
+            case ND_TYPE_INT:  return 4;
+            default:           return 1;
+        }
+    }
+    // array (pointer_level==0): sym_get_size gives the element size
+    return sym_get_size(sym);
+}
+
 void codegen_init(codegen_t *cg, FILE *out)
 {
     cg->out = out;
@@ -50,6 +80,7 @@ void codegen_init(codegen_t *cg, FILE *out)
     cg->errors = 0;
     cg->loop_label = -1;
     cg->loop_cont_kind = 0;
+    cg->str_count = 0;
 }
 
 void codegen_finish(codegen_t *cg)
@@ -406,7 +437,7 @@ static void cg_store_to_lvalue(codegen_t *cg, node_t *lhs)
     } else if (lhs->kind == ND_SUBSCRIPT) {
         int elem_size = 4;
         if (lhs->subscript.array->kind == ND_IDENT && lhs->subscript.array->ident.sym)
-            elem_size = sym_get_size(lhs->subscript.array->ident.sym);
+            elem_size = sym_elem_size(lhs->subscript.array->ident.sym);
         fprintf(cg->out, "\tpushq\t%%rax\n");
         cg_subscript_addr(cg, lhs); // address → %rax
         fprintf(cg->out, "\tmovq\t%%rax, %%rcx\n");
@@ -469,7 +500,7 @@ static void cg_subscript_addr(codegen_t *cg, node_t *n)
     // Determine element size
     int elem_size = 4;
     if (arr->kind == ND_IDENT && arr->ident.sym)
-        elem_size = sym_get_size(arr->ident.sym);
+        elem_size = sym_elem_size(arr->ident.sym);
 
     // Step 1: compute scaled index → %rcx
     cg_expr(cg, idx);                                         // index → %eax
@@ -497,7 +528,7 @@ static void cg_subscript(codegen_t *cg, node_t *n)
 {
     int elem_size = 4;
     if (n->subscript.array->kind == ND_IDENT && n->subscript.array->ident.sym)
-        elem_size = sym_get_size(n->subscript.array->ident.sym);
+        elem_size = sym_elem_size(n->subscript.array->ident.sym);
 
     cg_subscript_addr(cg, n); // address → %rax
     if (elem_size == 8)
@@ -574,13 +605,121 @@ static void cg_assign(codegen_t *cg, node_t *n)
     }
 }
 
+static void cg_str(codegen_t *cg, node_t *n)
+{
+    int id = cg->str_count++;
+    fprintf(cg->out, "\t.pushsection\t.rodata\n");
+    fprintf(cg->out, ".LC%d:\n", id);
+    // n->str.val.str points to opening '"'; n->str.val.len includes both quotes
+    fprintf(cg->out, "\t.string\t%.*s\n", n->str.val.len, n->str.val.str);
+    fprintf(cg->out, "\t.popsection\n");
+    fprintf(cg->out, "\tleaq\t.LC%d(%%rip), %%rax\n", id);
+}
+
+static void cg_zero_array(codegen_t *cg, int base, int total)
+{
+    int pos = 0;
+    while (pos + 8 <= total) {
+        fprintf(cg->out, "\tmovq\t$0, %d(%%rbp)\n", base + pos);
+        pos += 8;
+    }
+    if (pos + 4 <= total) {
+        fprintf(cg->out, "\tmovl\t$0, %d(%%rbp)\n", base + pos);
+        pos += 4;
+    }
+    while (pos < total) {
+        fprintf(cg->out, "\tmovb\t$0, %d(%%rbp)\n", base + pos);
+        pos++;
+    }
+}
+
+static void cg_array_init_str(codegen_t *cg, sym_t *sym, node_t *n)
+{
+    int base = sym->offset;
+    int capacity = sym->array_size; // char array: 1 byte per element
+
+    // 1. Zero the entire array
+    cg_zero_array(cg, base, capacity);
+
+    // 2. Emit movb for each string byte, parsing escape sequences
+    const char *src = n->str.val.str + 1; // skip opening '"'
+    int src_len = n->str.val.len - 2;      // exclude both quotes
+    int dest = 0;
+    for (int i = 0; i < src_len && dest < capacity - 1;) {
+        int byte_val;
+        if (src[i] == '\\' && i + 1 < src_len) {
+            switch (src[i + 1]) {
+                case 'n':  byte_val = '\n'; break;
+                case 't':  byte_val = '\t'; break;
+                case 'r':  byte_val = '\r'; break;
+                case '\\': byte_val = '\\'; break;
+                case '"':  byte_val = '"';  break;
+                case '0':  byte_val = '\0'; break;
+                default:   byte_val = (unsigned char)src[i + 1]; break;
+            }
+            i += 2;
+        } else {
+            byte_val = (unsigned char)src[i];
+            i++;
+        }
+        fprintf(cg->out, "\tmovb\t$%d, %d(%%rbp)\n", byte_val, base + dest);
+        dest++;
+    }
+    // Null terminator at dest is already zero from cg_zero_array
+}
+
+static void cg_array_init_list(codegen_t *cg, sym_t *sym, node_t *n)
+{
+    int base = sym->offset;
+    int elem_count = sym->array_size;
+    int elem_size = sym_get_size(sym); // per-element size (sym_get_size ignores array_size)
+    int total = elem_count * elem_size;
+
+    // 1. Zero the entire array
+    cg_zero_array(cg, base, total);
+
+    // 2. Apply each provided initializer
+    int count = n->initializer_list.count;
+    if (count > elem_count)
+        count = elem_count;
+    for (int i = 0; i < count; i++) {
+        cg_expr(cg, n->initializer_list.items[i]); // result in %rax / %eax
+        int offset = base + i * elem_size;
+        if (elem_size == 8)
+            fprintf(cg->out, "\tmovq\t%%rax, %d(%%rbp)\n", offset);
+        else if (elem_size == 1)
+            fprintf(cg->out, "\tmovb\t%%al, %d(%%rbp)\n", offset);
+        else
+            fprintf(cg->out, "\tmovl\t%%eax, %d(%%rbp)\n", offset);
+    }
+}
+
 static void cg_local_decl(codegen_t *cg, node_t *n)
 {
-    if (n->local_decl.init == NULL)
+    sym_t *sym = n->local_decl.sym;
+    node_t *init = n->local_decl.init;
+
+    if (init == NULL)
         return; // uninitialized — nothing to emit
-    cg_expr(cg, n->local_decl.init);
-    if (n->local_decl.sym)
-        cg_store_sym(cg, n->local_decl.sym);
+
+    if (sym && sym->array_size > 0) {
+        // Array initialization
+        if (init->kind == ND_STR) {
+            cg_array_init_str(cg, sym, init);
+        } else if (init->kind == ND_INITIALIZER_LIST) {
+            cg_array_init_list(cg, sym, init);
+        } else {
+            fprintf(stderr, "%d:%d: error: cannot initialize array with scalar expression\n",
+                    init->line, init->col);
+            cg->errors++;
+        }
+        return;
+    }
+
+    // Scalar initialization (existing path)
+    cg_expr(cg, init);
+    if (sym)
+        cg_store_sym(cg, sym);
 }
 
 static void cg_call(codegen_t *cg, node_t *n)
@@ -644,6 +783,9 @@ static void cg_expr(codegen_t *cg, node_t *n)
         case ND_NUM:
             cg_num(cg, n);
             break;
+        case ND_STR:
+            cg_str(cg, n);
+            break;
         case ND_IDENT:
             cg_ident(cg, n);
             break;
@@ -691,6 +833,11 @@ static void cg_expr(codegen_t *cg, node_t *n)
             fprintf(cg->out, "\tmovl\t$%d, %%eax\n", size);
             break;
         }
+        case ND_INITIALIZER_LIST:
+            fprintf(stderr, "%d:%d: error: initializer list in expression context\n",
+                    n->line, n->col);
+            cg->errors++;
+            break;
         default:
             fprintf(stderr, "codegen: unsupported expression kind %d\n", n->kind);
             break;

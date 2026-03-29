@@ -1,6 +1,6 @@
 # guscc
 
-A simple recursive-descent C compiler written in C99, aimed at eventual self-hosting. It supports a limited subset of C: `void`/`char`/`int` types, structs with member access (`.` and `->`), 1D fixed-size local arrays with subscript access and array-to-pointer decay, multiple functions per file, local variables, parameters (including unnamed parameters in declarations), assignments, function calls, `if`/`else`, `while`, `do-while`, `for`, `break`, `continue`, `return`, and expressions.
+A simple recursive-descent C compiler written in C99, aimed at eventual self-hosting. It supports a limited subset of C: `void`/`char`/`int` types, structs with member access (`.` and `->`), 1D fixed-size local arrays with subscript access, array-to-pointer decay, and array initializers (braced lists and string literals), string literal pointer initialization, multiple functions per file, local variables, parameters (including unnamed parameters in declarations), assignments, function calls, `if`/`else`, `while`, `do-while`, `for`, `break`, `continue`, `return`, and expressions.
 
 Given a C source file, `guscc` compiles it to x86-64 assembly (`.s`). By default only errors are printed to stderr. Pass `-d` to also print three debug sections to stdout: source with line numbers, the lexer token stream, and the parser AST.
 
@@ -65,7 +65,7 @@ Parameters are assigned negative `%rbp` offsets in declaration order (first para
 
 ## Current limitations
 
-- Array initializers (`int a[5] = {1,2,3,4,5}`), multi-dimensional arrays, and `sizeof(int[5])` (array in type-name context) are not supported
+- Multi-dimensional arrays, `sizeof(int[5])` (array in type-name context), and array initializers for non-`char` string literals are not supported
 - Only named struct definitions; no anonymous structs, no nested struct types, no struct assignment
 - Forward function calls (callee defined later in the file) produce an "undeclared identifier" warning; forward declarations with unnamed parameters are supported
 - Parenthesized abstract declarators (function pointer syntax like `int (*)(int)`) are parsed but not code-generated

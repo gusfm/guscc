@@ -130,6 +130,10 @@ void node_destroy(node_t *node)
             node_destroy(node->global_decl.declarator);
             node_destroy(node->global_decl.init);
             break;
+        case ND_INITIALIZER_LIST:
+            for (int i = 0; i < node->initializer_list.count; i++)
+                node_destroy(node->initializer_list.items[i]);
+            break;
         case ND_TYPE_SPEC:
         case ND_NUM:
         case ND_IDENT:
@@ -426,6 +430,12 @@ void ast_print(node_t *n, int indent)
             ast_print(n->global_decl.decl_spec, indent + 1);
             if (n->global_decl.init)
                 ast_print(n->global_decl.init, indent + 1);
+            break;
+        case ND_INITIALIZER_LIST:
+            printf("InitializerList:%d:%d: count=%d\n", n->line, n->col,
+                   n->initializer_list.count);
+            for (int i = 0; i < n->initializer_list.count; i++)
+                ast_print(n->initializer_list.items[i], indent + 1);
             break;
     }
 }

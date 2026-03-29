@@ -12,6 +12,7 @@ typedef struct {
     int errors;         // count of fatal errors (non-zero → codegen_exec returns -1)
     int loop_label;     // label number of innermost loop, -1 if not in a loop
     int loop_cont_kind; // continue target: 0=_start (while), 1=_cond (do-while), 2=_post (for)
+    int str_count;      // counter for .LC string literal labels
 } codegen_t;
 
 void codegen_init(codegen_t *cg, FILE *out);

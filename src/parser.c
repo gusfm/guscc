@@ -517,6 +517,53 @@ static int parser_align_down(int offset, int align)
     return -((-offset + align - 1) / align * align);
 }
 
+/* Parse an initializer: assignment_expression | '{' initializer_list '}'
+ *
+ * initializer
+ *   : assignment_expression
+ *   | '{' initializer_list [','] '}'
+ *   ;
+ */
+static node_t *parser_initializer(parser_t *p)
+{
+    token_t *peek = parser_peek(p);
+    if (peek->type != '{')
+        return parser_assignment_expression(p);
+
+    token_t *lb = parser_next(p);
+    int line = lb->line, col = lb->col;
+    token_destroy(lb);
+
+    node_t *n = node_create(ND_INITIALIZER_LIST, line, col);
+    n->initializer_list.count = 0;
+
+    if (parser_peek(p)->type != '}') {
+        while (1) {
+            if (n->initializer_list.count >= 64) {
+                fprintf(stderr, "%d:%d: error: too many initializers (max 64)\n", line, col);
+                node_destroy(n);
+                return NULL;
+            }
+            node_t *item = parser_initializer(p);
+            if (item == NULL) {
+                node_destroy(n);
+                return NULL;
+            }
+            n->initializer_list.items[n->initializer_list.count++] = item;
+            if (!parser_accept(p, ','))
+                break;
+            if (parser_peek(p)->type == '}')
+                break; // trailing comma
+        }
+    }
+
+    if (!parser_expect(p, '}')) {
+        node_destroy(n);
+        return NULL;
+    }
+    return n;
+}
+
 /* Parse a local variable declaration: decl_spec declarator [= expr] ;
  * Defines the symbol in the current scope and returns ND_LOCAL_DECL. */
 static node_t *parser_local_declaration(parser_t *p)
@@ -561,7 +608,7 @@ static node_t *parser_local_declaration(parser_t *p)
 
     node_t *init = NULL;
     if (parser_accept(p, '=')) {
-        init = parser_assignment_expression(p);
+        init = parser_initializer(p);
         if (init == NULL) {
             node_destroy(decl_spec);
             node_destroy(declarator);
@@ -1767,7 +1814,7 @@ static node_t *parser_declaration_body(parser_t *p, node_t *decl_spec, node_t *d
 {
     node_t *init = NULL;
     if (parser_accept(p, '=')) {
-        init = parser_assignment_expression(p);
+        init = parser_initializer(p);
         if (init == NULL) {
             node_destroy(decl_spec);
             node_destroy(declarator);
@@ -1785,32 +1832,6 @@ static node_t *parser_declaration_body(parser_t *p, node_t *decl_spec, node_t *d
     n->global_decl.declarator = declarator;
     n->global_decl.init = init;
     return n;
-}
-
-/*
- * declaration
- *  : declaration_specifiers ';'
- *  | declaration_specifiers init_declarator_list ';'
- *  ;
- */
-node_t *parser_declaration(parser_t *p)
-{
-    node_t *decl_spec = parser_declaration_specifiers(p);
-    if (decl_spec == NULL)
-        return NULL;
-    if (parser_accept(p, ';')) {
-        node_t *n = node_create(ND_GLOBAL_DECL, decl_spec->line, decl_spec->col);
-        n->global_decl.decl_spec = decl_spec;
-        n->global_decl.declarator = NULL;
-        n->global_decl.init = NULL;
-        return n;
-    }
-    node_t *declarator = parser_declarator(p);
-    if (declarator == NULL) {
-        node_destroy(decl_spec);
-        return NULL;
-    }
-    return parser_declaration_body(p, decl_spec, declarator);
 }
 
 /*

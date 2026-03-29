@@ -41,8 +41,9 @@ typedef enum {
     ND_TERNARY,          // cond ? then : else
     ND_ASSIGN,           // lvalue op= rvalue
     ND_COMMA,            // expr , expr
-    ND_LOCAL_DECL,       // local variable declaration: type name [= init] ;
-    ND_GLOBAL_DECL,      // global variable declaration: type name [= init] ;
+    ND_LOCAL_DECL,          // local variable declaration: type name [= init] ;
+    ND_GLOBAL_DECL,         // global variable declaration: type name [= init] ;
+    ND_INITIALIZER_LIST,    // { initializer, initializer, ... }
 } node_kind_t;
 
 typedef struct node node_t;
@@ -226,6 +227,11 @@ struct node {
             node_t *declarator; // ND_DIRECT_DECL — name + pointer_level; NULL for bare type decl
             node_t *init;       // optional initializer expr; NULL if absent
         } global_decl;          // used when kind == ND_GLOBAL_DECL
+
+        struct {
+            int count;
+            node_t *items[64]; // max 64 initializer elements
+        } initializer_list;    // used when kind == ND_INITIALIZER_LIST
     };
 };
 
