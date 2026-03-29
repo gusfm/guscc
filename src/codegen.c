@@ -9,6 +9,7 @@
 // Forward declarations
 static void cg_node(codegen_t *cg, node_t *n);
 static void cg_expr(codegen_t *cg, node_t *n);
+static void cg_load_sym(codegen_t *cg, sym_t *sym);
 static void cg_member_addr(codegen_t *cg, node_t *n);
 static void cg_member(codegen_t *cg, node_t *n);
 static void cg_subscript_addr(codegen_t *cg, node_t *n);
@@ -69,6 +70,37 @@ static int sym_elem_size(sym_t *sym)
     }
     // array (pointer_level==0): sym_get_size gives the element size
     return sym_get_size(sym);
+}
+
+// Return pointee element size if the expression evaluates to a pointer, else 0.
+// Handles ND_IDENT (pointer or decayed array) and ND_UNOP '&'.
+static int cg_expr_elem_size(node_t *n)
+{
+    if (n == NULL)
+        return 0;
+    switch (n->kind) {
+        case ND_IDENT:
+            if (n->ident.sym == NULL)
+                return 0;
+            if (n->ident.sym->pointer_level > 0 || n->ident.sym->array_size > 0)
+                return sym_elem_size(n->ident.sym);
+            return 0;
+        case ND_UNOP:
+            if (n->unop.op == '&') {
+                // &x has type T* — pointee size is the size of x
+                node_t *operand = n->unop.operand;
+                if (operand->kind == ND_IDENT && operand->ident.sym)
+                    return sym_get_size(operand->ident.sym);
+                return 4;
+            }
+            return 0;
+        case ND_ASSIGN:
+            return cg_expr_elem_size(n->assign.lhs);
+        case ND_COMMA:
+            return cg_expr_elem_size(n->comma.right);
+        default:
+            return 0;
+    }
 }
 
 void codegen_init(codegen_t *cg, FILE *out)
@@ -223,7 +255,81 @@ static void cg_binop(codegen_t *cg, node_t *n)
         return;
     }
 
-    // General case: left → %rax, push; right → %rax; pop left into %rcx
+    // Determine if either operand is a pointer (for pointer arithmetic / comparisons)
+    int left_elem = cg_expr_elem_size(n->binop.left);
+    int right_elem = cg_expr_elem_size(n->binop.right);
+
+    // Pointer arithmetic: pointer +/- integer, integer + pointer, pointer - pointer
+    if (op == '+' || op == '-') {
+        if (left_elem > 0 && right_elem == 0) {
+            // pointer +/- integer: scale integer by element size
+            cg_expr(cg, n->binop.left);                          // pointer → %rax
+            fprintf(cg->out, "\tpushq\t%%rax\n");
+            cg_expr(cg, n->binop.right);                         // integer → %eax
+            fprintf(cg->out, "\tmovslq\t%%eax, %%rax\n");        // sign-extend
+            if (left_elem != 1)
+                fprintf(cg->out, "\timulq\t$%d, %%rax\n", left_elem);
+            fprintf(cg->out, "\tpopq\t%%rcx\n");
+            if (op == '+')
+                fprintf(cg->out, "\taddq\t%%rcx, %%rax\n");
+            else {
+                fprintf(cg->out, "\tsubq\t%%rax, %%rcx\n");
+                fprintf(cg->out, "\tmovq\t%%rcx, %%rax\n");
+            }
+            return;
+        }
+        if (left_elem == 0 && right_elem > 0 && op == '+') {
+            // integer + pointer (commutative)
+            cg_expr(cg, n->binop.right);                         // pointer → %rax
+            fprintf(cg->out, "\tpushq\t%%rax\n");
+            cg_expr(cg, n->binop.left);                          // integer → %eax
+            fprintf(cg->out, "\tmovslq\t%%eax, %%rax\n");
+            if (right_elem != 1)
+                fprintf(cg->out, "\timulq\t$%d, %%rax\n", right_elem);
+            fprintf(cg->out, "\tpopq\t%%rcx\n");
+            fprintf(cg->out, "\taddq\t%%rcx, %%rax\n");
+            return;
+        }
+        if (left_elem > 0 && right_elem > 0 && op == '-') {
+            // pointer - pointer: byte difference divided by element size
+            cg_expr(cg, n->binop.left);
+            fprintf(cg->out, "\tpushq\t%%rax\n");
+            cg_expr(cg, n->binop.right);
+            fprintf(cg->out, "\tpopq\t%%rcx\n");
+            fprintf(cg->out, "\tsubq\t%%rax, %%rcx\n");          // byte diff in %rcx
+            fprintf(cg->out, "\tmovq\t%%rcx, %%rax\n");
+            if (left_elem == 2)
+                fprintf(cg->out, "\tsarq\t$1, %%rax\n");
+            else if (left_elem == 4)
+                fprintf(cg->out, "\tsarq\t$2, %%rax\n");
+            else if (left_elem == 8)
+                fprintf(cg->out, "\tsarq\t$3, %%rax\n");
+            return;
+        }
+    }
+
+    // Pointer comparisons: use 64-bit cmpq when either operand is a pointer
+    if ((left_elem > 0 || right_elem > 0) &&
+        (op == TOKEN_EQ_OP || op == TOKEN_NE_OP || op == '<' || op == '>' ||
+         op == TOKEN_LE_OP || op == TOKEN_GE_OP)) {
+        cg_expr(cg, n->binop.left);
+        fprintf(cg->out, "\tpushq\t%%rax\n");
+        cg_expr(cg, n->binop.right);
+        fprintf(cg->out, "\tpopq\t%%rcx\n");
+        fprintf(cg->out, "\tcmpq\t%%rax, %%rcx\n");
+        switch (op) {
+            case TOKEN_EQ_OP: fprintf(cg->out, "\tsete\t%%al\n");  break;
+            case TOKEN_NE_OP: fprintf(cg->out, "\tsetne\t%%al\n"); break;
+            case '<':         fprintf(cg->out, "\tsetl\t%%al\n");  break;
+            case '>':         fprintf(cg->out, "\tsetg\t%%al\n");  break;
+            case TOKEN_LE_OP: fprintf(cg->out, "\tsetle\t%%al\n"); break;
+            case TOKEN_GE_OP: fprintf(cg->out, "\tsetge\t%%al\n"); break;
+        }
+        fprintf(cg->out, "\tmovzbl\t%%al, %%eax\n");
+        return;
+    }
+
+    // General integer arithmetic: left → %rax, push; right → %rax; pop left into %rcx
     cg_expr(cg, n->binop.left);
     fprintf(cg->out, "\tpushq\t%%rax\n");
     cg_expr(cg, n->binop.right);
@@ -250,10 +356,53 @@ static void cg_unop(codegen_t *cg, node_t *n)
         return;
     }
 
-    // Dereference: *p → load from pointer
+    // Dereference: *p → load from pointer (size depends on pointee type)
     if (op == '*') {
+        int elem = cg_expr_elem_size(n->unop.operand);
+        // Diagnose dereference of a plain non-pointer identifier
+        if (elem == 0 && n->unop.operand->kind == ND_IDENT &&
+            n->unop.operand->ident.sym != NULL &&
+            n->unop.operand->ident.sym->pointer_level == 0 &&
+            n->unop.operand->ident.sym->array_size == 0) {
+            fprintf(stderr, "%d:%d: error: dereference of non-pointer type '%.*s'\n", n->line,
+                    n->col, n->unop.operand->ident.name.len, n->unop.operand->ident.name.str);
+            cg->errors++;
+            fprintf(cg->out, "\txorl\t%%eax, %%eax\n");
+            return;
+        }
         cg_expr(cg, n->unop.operand); // pointer → %rax
-        fprintf(cg->out, "\tmovl\t(%%rax), %%eax\n");
+        if (elem == 8)
+            fprintf(cg->out, "\tmovq\t(%%rax), %%rax\n");
+        else if (elem == 1)
+            fprintf(cg->out, "\tmovsbl\t(%%rax), %%eax\n");
+        else
+            fprintf(cg->out, "\tmovl\t(%%rax), %%eax\n");
+        return;
+    }
+
+    // Prefix ++/--: increment/decrement lvalue and return updated value
+    if (op == TOKEN_INC_OP || op == TOKEN_DEC_OP) {
+        node_t *operand = n->unop.operand;
+        if (operand->kind != ND_IDENT || operand->ident.sym == NULL) {
+            fprintf(stderr, "codegen: prefix ++/-- on unsupported lvalue\n");
+            cg->errors++;
+            return;
+        }
+        sym_t *sym = operand->ident.sym;
+        int size = sym_get_size(sym);
+        int delta = (sym->pointer_level > 0) ? sym_elem_size(sym) : 1;
+        if (op == TOKEN_INC_OP) {
+            if (size == 8)
+                fprintf(cg->out, "\taddq\t$%d, %d(%%rbp)\n", delta, sym->offset);
+            else
+                fprintf(cg->out, "\taddl\t$%d, %d(%%rbp)\n", delta, sym->offset);
+        } else {
+            if (size == 8)
+                fprintf(cg->out, "\tsubq\t$%d, %d(%%rbp)\n", delta, sym->offset);
+            else
+                fprintf(cg->out, "\tsubl\t$%d, %d(%%rbp)\n", delta, sym->offset);
+        }
+        cg_load_sym(cg, sym); // return updated value
         return;
     }
 
@@ -396,8 +545,14 @@ static void cg_load_lvalue(codegen_t *cg, node_t *n)
         }
         cg_load_sym(cg, n->ident.sym);
     } else if (n->kind == ND_UNOP && n->unop.op == '*') {
+        int elem = cg_expr_elem_size(n->unop.operand);
         cg_expr(cg, n->unop.operand); // pointer in %rax
-        fprintf(cg->out, "\tmovl\t(%%rax), %%eax\n");
+        if (elem == 8)
+            fprintf(cg->out, "\tmovq\t(%%rax), %%rax\n");
+        else if (elem == 1)
+            fprintf(cg->out, "\tmovsbl\t(%%rax), %%eax\n");
+        else
+            fprintf(cg->out, "\tmovl\t(%%rax), %%eax\n");
     } else if (n->kind == ND_MEMBER) {
         cg_member(cg, n);
     } else if (n->kind == ND_SUBSCRIPT) {
@@ -445,6 +600,19 @@ static void cg_store_to_lvalue(codegen_t *cg, node_t *lhs)
         if (elem_size == 8)
             fprintf(cg->out, "\tmovq\t%%rax, (%%rcx)\n");
         else if (elem_size == 1)
+            fprintf(cg->out, "\tmovb\t%%al, (%%rcx)\n");
+        else
+            fprintf(cg->out, "\tmovl\t%%eax, (%%rcx)\n");
+    } else if (lhs->kind == ND_UNOP && lhs->unop.op == '*') {
+        // *ptr = value: evaluate pointer, store value at its address
+        int elem = cg_expr_elem_size(lhs->unop.operand);
+        fprintf(cg->out, "\tpushq\t%%rax\n");
+        cg_expr(cg, lhs->unop.operand); // pointer → %rax
+        fprintf(cg->out, "\tmovq\t%%rax, %%rcx\n");
+        fprintf(cg->out, "\tpopq\t%%rax\n");
+        if (elem == 8)
+            fprintf(cg->out, "\tmovq\t%%rax, (%%rcx)\n");
+        else if (elem == 1)
             fprintf(cg->out, "\tmovb\t%%al, (%%rcx)\n");
         else
             fprintf(cg->out, "\tmovl\t%%eax, (%%rcx)\n");
@@ -594,14 +762,33 @@ static void cg_assign(codegen_t *cg, node_t *n)
         cg_store_to_lvalue(cg, n->assign.lhs);
         // Value of expression stays in %eax/%rax (correct for assignment)
     } else {
-        // Compound assignment: load current lhs, push; eval rhs; pop; arith;
-        // store
-        cg_load_lvalue(cg, n->assign.lhs);
-        fprintf(cg->out, "\tpushq\t%%rax\n"); // save lhs value (left operand)
-        cg_expr(cg, n->assign.rhs);           // rhs in %eax (right operand)
-        fprintf(cg->out, "\tpopq\t%%rcx\n");  // left back in %rcx
-        cg_arith(cg, compound_base_op(op));   // result in %eax
-        cg_store_to_lvalue(cg, n->assign.lhs);
+        // Compound assignment: load current lhs, push; eval rhs; pop; arith; store
+        if ((op == TOKEN_ADD_ASSIGN || op == TOKEN_SUB_ASSIGN) &&
+            cg_expr_elem_size(n->assign.lhs) > 0) {
+            // pointer += integer  or  pointer -= integer
+            int lhs_elem = cg_expr_elem_size(n->assign.lhs);
+            cg_load_lvalue(cg, n->assign.lhs);            // pointer → %rax
+            fprintf(cg->out, "\tpushq\t%%rax\n");
+            cg_expr(cg, n->assign.rhs);                   // integer → %eax
+            fprintf(cg->out, "\tmovslq\t%%eax, %%rax\n"); // sign-extend
+            if (lhs_elem != 1)
+                fprintf(cg->out, "\timulq\t$%d, %%rax\n", lhs_elem);
+            fprintf(cg->out, "\tpopq\t%%rcx\n");
+            if (op == TOKEN_ADD_ASSIGN)
+                fprintf(cg->out, "\taddq\t%%rcx, %%rax\n");
+            else {
+                fprintf(cg->out, "\tsubq\t%%rax, %%rcx\n");
+                fprintf(cg->out, "\tmovq\t%%rcx, %%rax\n");
+            }
+            cg_store_to_lvalue(cg, n->assign.lhs);
+        } else {
+            cg_load_lvalue(cg, n->assign.lhs);
+            fprintf(cg->out, "\tpushq\t%%rax\n"); // save lhs value (left operand)
+            cg_expr(cg, n->assign.rhs);           // rhs in %eax (right operand)
+            fprintf(cg->out, "\tpopq\t%%rcx\n");  // left back in %rcx
+            cg_arith(cg, compound_base_op(op));   // result in %eax
+            cg_store_to_lvalue(cg, n->assign.lhs);
+        }
     }
 }
 
@@ -762,16 +949,17 @@ static void cg_postop(codegen_t *cg, node_t *n)
     cg_load_sym(cg, sym);
 
     // Increment or decrement the variable in place
+    int delta = (sym->pointer_level > 0) ? sym_elem_size(sym) : 1;
     if (n->postop.op == TOKEN_INC_OP) {
         if (size == 8)
-            fprintf(cg->out, "\taddq\t$1, %d(%%rbp)\n", sym->offset);
+            fprintf(cg->out, "\taddq\t$%d, %d(%%rbp)\n", delta, sym->offset);
         else
-            fprintf(cg->out, "\taddl\t$1, %d(%%rbp)\n", sym->offset);
+            fprintf(cg->out, "\taddl\t$%d, %d(%%rbp)\n", delta, sym->offset);
     } else {
         if (size == 8)
-            fprintf(cg->out, "\tsubq\t$1, %d(%%rbp)\n", sym->offset);
+            fprintf(cg->out, "\tsubq\t$%d, %d(%%rbp)\n", delta, sym->offset);
         else
-            fprintf(cg->out, "\tsubl\t$1, %d(%%rbp)\n", sym->offset);
+            fprintf(cg->out, "\tsubl\t$%d, %d(%%rbp)\n", delta, sym->offset);
     }
 }
 

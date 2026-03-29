@@ -1,6 +1,6 @@
 # guscc
 
-A simple recursive-descent C compiler written in C99, aimed at eventual self-hosting. It supports a limited subset of C: `void`/`char`/`int` types, structs with member access (`.` and `->`), 1D fixed-size local arrays with subscript access, array-to-pointer decay, and array initializers (braced lists and string literals), string literal pointer initialization, multiple functions per file, local variables, parameters (including unnamed parameters in declarations), assignments, function calls, `if`/`else`, `while`, `do-while`, `for`, `break`, `continue`, `return`, and expressions.
+A simple recursive-descent C compiler written in C99, aimed at eventual self-hosting. It supports a limited subset of C: `void`/`char`/`int` types, structs with member access (`.` and `->`), 1D fixed-size local arrays with subscript access, array-to-pointer decay, array initializers (braced lists and string literals), string literal pointer initialization, pointer arithmetic (`+`, `-`, `+=`, `-=`, `++`, `--`, comparisons, and pointer subtraction yielding an element count), multiple functions per file, local variables, parameters (including unnamed parameters in declarations), assignments, function calls, `if`/`else`, `while`, `do-while`, `for`, `break`, `continue`, `return`, and expressions.
 
 Given a C source file, `guscc` compiles it to x86-64 assembly (`.s`). By default only errors are printed to stderr. Pass `-d` to also print three debug sections to stdout: source with line numbers, the lexer token stream, and the parser AST.
 
@@ -71,3 +71,4 @@ Parameters are assigned negative `%rbp` offsets in declaration order (first para
 - Parenthesized abstract declarators (function pointer syntax like `int (*)(int)`) are parsed but not code-generated
 - Global variable declarations are not yet supported
 - Only up to 6 integer parameters (System V AMD64 ABI register arguments)
+- Pointer arithmetic on pointer-typed function parameters is not yet supported (only local pointer variables)

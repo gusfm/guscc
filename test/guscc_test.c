@@ -356,6 +356,80 @@ static int guscc_test_fail_array_unsized(void)
     return 0;
 }
 
+/* ---- Pointer arithmetic ---- */
+
+static int guscc_test_ptr_arith_add(void)
+{
+    return compile_and_run("../test/files/ptr_arith_add.c", 42);
+}
+
+static int guscc_test_ptr_arith_sub(void)
+{
+    return compile_and_run("../test/files/ptr_arith_sub.c", 7);
+}
+
+static int guscc_test_ptr_arith_postinc(void)
+{
+    return compile_and_run("../test/files/ptr_arith_postinc.c", 42);
+}
+
+static int guscc_test_ptr_arith_postdec(void)
+{
+    return compile_and_run("../test/files/ptr_arith_postdec.c", 42);
+}
+
+static int guscc_test_ptr_arith_preinc(void)
+{
+    return compile_and_run("../test/files/ptr_arith_preinc.c", 42);
+}
+
+static int guscc_test_ptr_arith_predec(void)
+{
+    return compile_and_run("../test/files/ptr_arith_predec.c", 42);
+}
+
+static int guscc_test_ptr_arith_add_assign(void)
+{
+    return compile_and_run("../test/files/ptr_arith_add_assign.c", 42);
+}
+
+static int guscc_test_ptr_arith_sub_assign(void)
+{
+    return compile_and_run("../test/files/ptr_arith_sub_assign.c", 7);
+}
+
+static int guscc_test_ptr_arith_compare(void)
+{
+    return compile_and_run("../test/files/ptr_arith_compare.c", 42);
+}
+
+static int guscc_test_ptr_arith_ptrdiff(void)
+{
+    return compile_and_run("../test/files/ptr_arith_ptrdiff.c", 4);
+}
+
+static int guscc_test_ptr_arith_deref_write(void)
+{
+    return compile_and_run("../test/files/ptr_arith_deref_write.c", 42);
+}
+
+static int guscc_test_ptr_arith_array_decay(void)
+{
+    return compile_and_run("../test/files/ptr_arith_array_decay.c", 42);
+}
+
+static int guscc_test_ptr_char_arith(void)
+{
+    return compile_and_run("../test/files/ptr_char_arith.c", 42);
+}
+
+static int guscc_test_fail_deref_nonptr(void)
+{
+    int ret = compile_file("../test/files/fail_deref_nonptr.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -432,6 +506,21 @@ void guscc_test(void)
     ut_run(guscc_test_array_init_partial);
     ut_run(guscc_test_array_init_char);
 
+    /* Pointer arithmetic */
+    ut_run(guscc_test_ptr_arith_add);
+    ut_run(guscc_test_ptr_arith_sub);
+    ut_run(guscc_test_ptr_arith_postinc);
+    ut_run(guscc_test_ptr_arith_postdec);
+    ut_run(guscc_test_ptr_arith_preinc);
+    ut_run(guscc_test_ptr_arith_predec);
+    ut_run(guscc_test_ptr_arith_add_assign);
+    ut_run(guscc_test_ptr_arith_sub_assign);
+    ut_run(guscc_test_ptr_arith_compare);
+    ut_run(guscc_test_ptr_arith_ptrdiff);
+    ut_run(guscc_test_ptr_arith_deref_write);
+    ut_run(guscc_test_ptr_arith_array_decay);
+    ut_run(guscc_test_ptr_char_arith);
+
     /* Failure paths */
     ut_run(guscc_test_fail_syntax_error);
     ut_run(guscc_test_fail_undeclared_var);
@@ -440,4 +529,5 @@ void guscc_test(void)
     ut_run(guscc_test_fail_struct_no_body);
     ut_run(guscc_test_fail_unnamed_param_def);
     ut_run(guscc_test_fail_array_unsized);
+    ut_run(guscc_test_fail_deref_nonptr);
 }
