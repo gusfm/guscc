@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 // guscc: a simple recursive C compiler
 // It will support a limited number of features. The minimum necessary for
 // self-hosting.
@@ -11,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "ast.h"
 #include "codegen.h"
@@ -111,12 +113,22 @@ void debug_file(char *buf)
 int main(int argc, char **argv)
 {
     int debug = 0;
+    int asm_only = 0;
     const char *filename = NULL;
+    const char *outname = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-d") == 0)
             debug = 1;
-        else if (filename == NULL)
+        else if (strcmp(argv[i], "-S") == 0)
+            asm_only = 1;
+        else if (strcmp(argv[i], "-o") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "error: -o requires an argument\n");
+                return -1;
+            }
+            outname = argv[i];
+        } else if (filename == NULL)
             filename = argv[i];
         else {
             fprintf(stderr, "error: unexpected argument '%s'\n", argv[i]);
@@ -125,7 +137,7 @@ int main(int argc, char **argv)
     }
 
     if (filename == NULL) {
-        fprintf(stderr, "error: syntax: guscc [-d] <file.c>\n");
+        fprintf(stderr, "error: syntax: guscc [-d] [-S] [-o <output>] <file.c>\n");
         return -1;
     }
 
@@ -143,16 +155,24 @@ int main(int argc, char **argv)
         lexer(buf, size);
     }
 
+    /* Derive output path for assembly-only mode */
     char outpath[512];
-    const char *base = strrchr(filename, '/');
-    base = base ? base + 1 : filename;
-    strncpy(outpath, base, sizeof(outpath) - 1);
-    outpath[sizeof(outpath) - 1] = '\0';
-    size_t inlen = strlen(outpath);
-    if (inlen >= 2 && outpath[inlen - 2] == '.' && outpath[inlen - 1] == 'c')
-        outpath[inlen - 1] = 's';
-    else
-        strncat(outpath, ".s", sizeof(outpath) - inlen - 1);
+    if (asm_only) {
+        if (outname) {
+            strncpy(outpath, outname, sizeof(outpath) - 1);
+            outpath[sizeof(outpath) - 1] = '\0';
+        } else {
+            const char *base = strrchr(filename, '/');
+            base = base ? base + 1 : filename;
+            strncpy(outpath, base, sizeof(outpath) - 1);
+            outpath[sizeof(outpath) - 1] = '\0';
+            size_t inlen = strlen(outpath);
+            if (inlen >= 2 && outpath[inlen - 2] == '.' && outpath[inlen - 1] == 'c')
+                outpath[inlen - 1] = 's';
+            else
+                strncat(outpath, ".s", sizeof(outpath) - inlen - 1);
+        }
+    }
 
     node_t *ast = parser(buf, size);
     if (debug && ast != NULL) {
@@ -164,8 +184,64 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    int ret = codegen(ast, outpath);
+    if (asm_only) {
+        int ret = codegen(ast, outpath);
+        node_destroy(ast);
+        free(buf);
+        return ret;
+    }
+
+    /* Binary mode: codegen to a temp .s, assemble with as, link with ld */
+    char tmpbase[] = "/tmp/guscc_XXXXXX";
+    int fd = mkstemp(tmpbase);
+    if (fd < 0) {
+        perror("mkstemp");
+        node_destroy(ast);
+        free(buf);
+        return -1;
+    }
+    close(fd);
+    unlink(tmpbase);
+
+    char asmfile[80], objfile[80];
+    snprintf(asmfile, sizeof(asmfile), "%s.s", tmpbase);
+    snprintf(objfile, sizeof(objfile), "%s.o", tmpbase);
+
+    int ret = codegen(ast, asmfile);
     node_destroy(ast);
     free(buf);
-    return ret;
+    if (ret != 0) {
+        unlink(asmfile);
+        return ret;
+    }
+
+    char cmd[1024];
+    snprintf(cmd, sizeof(cmd), "as -o %s %s", objfile, asmfile);
+    ret = system(cmd);
+    unlink(asmfile);
+    if (ret != 0) {
+        fprintf(stderr, "error: assembler failed\n");
+        unlink(objfile);
+        return -1;
+    }
+
+    const char *binary = outname ? outname : "a.out";
+    snprintf(cmd, sizeof(cmd),
+             "ld -o %s "
+             "-dynamic-linker /lib64/ld-linux-x86-64.so.2 "
+             "/usr/lib/x86_64-linux-gnu/crt1.o "
+             "/usr/lib/x86_64-linux-gnu/crti.o "
+             "%s "
+             "-lc "
+             "/usr/lib/x86_64-linux-gnu/crtn.o "
+             "-L/usr/lib/x86_64-linux-gnu",
+             binary, objfile);
+    ret = system(cmd);
+    unlink(objfile);
+    if (ret != 0) {
+        fprintf(stderr, "error: linker failed\n");
+        return -1;
+    }
+
+    return 0;
 }

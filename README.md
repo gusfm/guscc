@@ -2,7 +2,7 @@
 
 A recursive-descent C compiler written in C99, targeting x86-64 Linux (System V ABI). The goal is eventual self-hosting.
 
-It compiles a subset of C — covering `void`/`char`/`int` scalar types, pointers, 1D arrays, structs, pointer arithmetic, and the usual control flow (`if`/`else`, `while`, `do-while`, `for`, `break`, `continue`, `return`) — down to x86-64 assembly (`.s`). By default only errors go to stderr; pass `-d` to also dump the source with line numbers, the token stream, and the AST.
+It compiles a subset of C — covering `void`/`char`/`int` scalar types, pointers, 1D arrays, structs, pointer arithmetic, and the usual control flow (`if`/`else`, `while`, `do-while`, `for`, `break`, `continue`, `return`) — directly to a native binary. By default only errors go to stderr; pass `-d` to also dump the source with line numbers, the token stream, and the AST.
 
 ## Requirements
 
@@ -21,18 +21,19 @@ The binary is placed at `build/guscc`.
 ## Usage
 
 ```bash
-# Compile silently (only errors to stderr)
+# Compile to binary (output is a.out in the current directory)
 ./build/guscc test/files/return_literal.c
+./a.out; echo $?   # prints 42
+
+# Compile to binary with explicit output name
+./build/guscc -o return_literal test/files/return_literal.c
+./return_literal; echo $?   # prints 42
+
+# Compile to assembly only (output is return_literal.s in the current directory)
+./build/guscc -S test/files/return_literal.c
 
 # Compile with debug output (source, tokens, AST printed to stdout)
 ./build/guscc -d test/files/return_literal.c
-```
-
-Both write the assembly to `return_literal.s` in the **current directory**. Assemble and run with gcc:
-
-```bash
-gcc return_literal.s -o return_literal
-./return_literal; echo $?   # prints 42
 ```
 
 ## Testing
@@ -43,11 +44,11 @@ Tests must be run from `build/` because they invoke `./guscc`:
 cmake --build build && cd build && ./guscc_test
 ```
 
-Tests live in `test/` and use a custom framework (`test/ut.h`). Lexer unit tests tokenize C snippets and assert token types and values. End-to-end compiler tests compile a source file, assemble the output, run the binary, and verify the exit code. Failure-path tests verify that guscc exits non-zero on invalid input.
+Tests live in `test/` and use a custom framework (`test/ut.h`). Lexer unit tests tokenize C snippets and assert token types and values. End-to-end compiler tests compile a source file to a binary, run it, and verify the exit code. Failure-path tests verify that guscc exits non-zero on invalid input.
 
 ## Architecture
 
-Pipeline: **source → lexer → parser → AST + symbol table → codegen → x86-64 assembly**
+Pipeline: **source → lexer → parser → AST + symbol table → codegen → x86-64 assembly → binary**
 
 | Module | Role |
 |--------|------|

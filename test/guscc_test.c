@@ -12,8 +12,8 @@ static int compile_file(char *file)
     return system(str);
 }
 
-/* Run guscc, assemble the output, execute and assert exit code == expected.
- * asm_out and bin_out are derived from src: the last path component minus ".c". */
+/* Compile src to a binary with guscc, execute and assert exit code == expected.
+ * bin_out is derived from src: the last path component minus ".c" + "_out". */
 static int compile_and_run(const char *src, int expected_exit)
 {
     const char *slash = strrchr(src, '/');
@@ -21,18 +21,13 @@ static int compile_and_run(const char *src, int expected_exit)
     const char *dot = strrchr(filename, '.');
     int stem_len = dot ? (int)(dot - filename) : (int)strlen(filename);
 
-    char asm_out[256], bin_out[256];
-    snprintf(asm_out, sizeof(asm_out), "./%.*s.s", stem_len, filename);
+    char bin_out[256];
     snprintf(bin_out, sizeof(bin_out), "./%.*s_out", stem_len, filename);
 
     char cmd[1024];
     int ret;
 
-    snprintf(cmd, sizeof(cmd), "./guscc %s > /dev/null 2>&1", src);
-    ret = system(cmd);
-    ASSERT(ret == 0);
-
-    snprintf(cmd, sizeof(cmd), "gcc %s -o %s > /dev/null 2>&1", asm_out, bin_out);
+    snprintf(cmd, sizeof(cmd), "./guscc -o %s %s > /dev/null 2>&1", bin_out, src);
     ret = system(cmd);
     ASSERT(ret == 0);
 
