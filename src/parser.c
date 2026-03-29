@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "ast.h"
 #include "sym.h"
@@ -15,6 +16,7 @@ node_t *parser_expression(parser_t *p);
 node_t *parser_assignment_expression(parser_t *p);
 node_t *parser_cast_expression(parser_t *p);
 node_t *parser_unary_expression(parser_t *p);
+static int parser_sym_size(node_t *decl_spec, int pointer_level);
 
 void parser_init(parser_t *p, char *buf, size_t size)
 {
@@ -24,6 +26,7 @@ void parser_init(parser_t *p, char *buf, size_t size)
     p->scope = NULL;
     p->func_scope = scope_new(NULL);
     p->frame_offset = 0;
+    p->struct_defs = NULL;
 }
 
 void parser_finish(parser_t *p)
@@ -41,6 +44,8 @@ void parser_finish(parser_t *p)
         scope_free(p->func_scope);
         p->func_scope = NULL;
     }
+    struct_def_destroy_list(p->struct_defs);
+    p->struct_defs = NULL;
 }
 
 token_t *parser_peek(parser_t *p)
@@ -104,8 +109,151 @@ bool parser_expect(parser_t *p, token_type_t type)
     return false;
 }
 
+static int parser_align_up(int offset, int align)
+{
+    return (offset + align - 1) & ~(align - 1);
+}
+
+/*
+ * struct_or_union_specifier
+ *  : struct_or_union IDENTIFIER '{' struct_declaration_list '}'
+ *  | struct_or_union '{' struct_declaration_list '}'
+ *  | struct_or_union IDENTIFIER
+ *  ;
+ * struct_or_union
+ *  : STRUCT
+ *  | UNION
+ *  ;
+ */
+node_t *parser_struct_or_union_specifier(parser_t *p)
+{
+    token_t *kw = parser_expect_token(p, TOKEN_KW_STRUCT);
+    if (kw == NULL)
+        return NULL;
+    int line = kw->line, col = kw->col;
+    token_destroy(kw);
+
+    // Optional tag name
+    char *tag = NULL;
+    int tag_len = 0;
+    token_t *peek = parser_peek(p);
+    if (peek != NULL && peek->type == TOKEN_IDENT) {
+        token_t *ident = parser_next(p);
+        tag = ident->sval;
+        tag_len = ident->len;
+        token_destroy(ident);
+    }
+
+    // If '{' follows, parse struct body
+    if (parser_accept(p, '{')) {
+        struct_member_t *members = NULL;
+        struct_member_t **tail = &members;
+        int offset = 0;
+        int max_align = 1;
+
+        while (!parser_accept(p, '}')) {
+            node_t *mem_decl_spec = parser_declaration_specifiers(p);
+            if (mem_decl_spec == NULL) {
+                struct_member_destroy_list(members);
+                return NULL;
+            }
+            node_t *mem_declarator = parser_declarator(p);
+            if (mem_declarator == NULL) {
+                node_destroy(mem_decl_spec);
+                struct_member_destroy_list(members);
+                return NULL;
+            }
+            if (!parser_expect(p, ';')) {
+                node_destroy(mem_decl_spec);
+                node_destroy(mem_declarator);
+                struct_member_destroy_list(members);
+                return NULL;
+            }
+
+            int ptr_lvl = mem_declarator->direct_decl.pointer_level;
+            int mem_size = parser_sym_size(mem_decl_spec, ptr_lvl);
+            int mem_align = mem_size < 8 ? mem_size : 8;
+
+            // Align offset for this member
+            offset = parser_align_up(offset, mem_align);
+            if (mem_align > max_align)
+                max_align = mem_align;
+
+            struct_member_t *m = malloc(sizeof(struct_member_t));
+            m->name = mem_declarator->direct_decl.ident.str;
+            m->name_len = mem_declarator->direct_decl.ident.len;
+            m->decl_spec = mem_decl_spec;
+            m->pointer_level = ptr_lvl;
+            m->offset = offset;
+            m->size = mem_size;
+            m->next = NULL;
+            *tail = m;
+            tail = &m->next;
+
+            offset += mem_size;
+            node_destroy(mem_declarator);
+        }
+
+        // Total struct size with tail padding
+        int total_size = parser_align_up(offset, max_align);
+
+        struct_def_t *def = malloc(sizeof(struct_def_t));
+        def->tag = tag;
+        def->tag_len = tag_len;
+        def->members = members;
+        def->size = total_size;
+        def->align = max_align;
+        def->next = p->struct_defs;
+        p->struct_defs = def;
+
+        node_t *node = node_create(ND_STRUCT_SPEC, line, col);
+        node->struct_spec.tag.str = tag;
+        node->struct_spec.tag.len = tag_len;
+        node->struct_spec.def = def;
+        return node;
+    }
+
+    // No body — look up existing definition
+    if (tag == NULL) {
+        fprintf(stderr, "%d:%d: error: expected struct tag or body\n", line, col);
+        return NULL;
+    }
+
+    struct_def_t *def = struct_def_lookup(p->struct_defs, tag, tag_len);
+    if (def == NULL) {
+        fprintf(stderr, "%d:%d: error: use of undefined struct '%.*s'\n", line, col, tag_len, tag);
+        return NULL;
+    }
+
+    node_t *node = node_create(ND_STRUCT_SPEC, line, col);
+    node->struct_spec.tag.str = tag;
+    node->struct_spec.tag.len = tag_len;
+    node->struct_spec.def = def;
+    return node;
+}
+
+/*
+ * type_specifier
+ *  : VOID
+ *  | CHAR
+ *  | SHORT
+ *  | INT
+ *  | LONG
+ *  | FLOAT
+ *  | DOUBLE
+ *  | SIGNED
+ *  | UNSIGNED
+ *  | struct_or_union_specifier
+ *  | enum_specifier
+ *  | TYPE_NAME
+ *  ;
+ */
 node_t *parser_type_specifier(parser_t *p)
 {
+    token_t *peek = parser_peek(p);
+    if (peek != NULL && peek->type == TOKEN_KW_STRUCT)
+        return parser_struct_or_union_specifier(p);
+
     token_t *tok = parser_next(p);
     node_t *node = node_create(ND_TYPE_SPEC, tok->line, tok->col);
     if (tok->type == TOKEN_KW_VOID) {
@@ -234,7 +382,8 @@ node_t *parser_declarator(parser_t *p)
 
 static bool parser_is_type_token(token_type_t type)
 {
-    return type == TOKEN_KW_INT || type == TOKEN_KW_CHAR || type == TOKEN_KW_VOID;
+    return type == TOKEN_KW_INT || type == TOKEN_KW_CHAR || type == TOKEN_KW_VOID ||
+           type == TOKEN_KW_STRUCT;
 }
 
 /* Return the byte size of a type given its decl_spec and pointer level */
@@ -244,6 +393,10 @@ static int parser_sym_size(node_t *decl_spec, int pointer_level)
         return 8;
     if (decl_spec == NULL || decl_spec->decl_spec.type_spec == NULL)
         return 4;
+    if (decl_spec->decl_spec.type_spec->kind == ND_STRUCT_SPEC) {
+        struct_def_t *def = decl_spec->decl_spec.type_spec->struct_spec.def;
+        return def ? def->size : 4;
+    }
     switch (decl_spec->decl_spec.type_spec->type_spec) {
         case ND_TYPE_CHAR:
             return 1;
@@ -279,7 +432,14 @@ static node_t *parser_local_declaration(parser_t *p)
 
     int pointer_level = declarator->direct_decl.pointer_level;
     int size = parser_sym_size(decl_spec, pointer_level);
-    p->frame_offset = parser_align_down(p->frame_offset - size, size < 8 ? size : 8);
+    int align = size < 8 ? size : 8;
+    if (pointer_level == 0 && decl_spec->decl_spec.type_spec &&
+        decl_spec->decl_spec.type_spec->kind == ND_STRUCT_SPEC) {
+        struct_def_t *def = decl_spec->decl_spec.type_spec->struct_spec.def;
+        if (def)
+            align = def->align;
+    }
+    p->frame_offset = parser_align_down(p->frame_offset - size, align);
 
     sym_t *sym =
         scope_define(p->scope, declarator->direct_decl.ident.str, declarator->direct_decl.ident.len,
@@ -384,6 +544,33 @@ node_t *parser_primary_expression(parser_t *p)
     return NULL;
 }
 
+/* Try to resolve a struct member access. Sets mem->member.resolved if
+ * the object is a simple ND_IDENT with a struct-typed symbol. */
+static void parser_resolve_member(node_t *mem)
+{
+    mem->member.resolved = NULL;
+    node_t *obj = mem->member.object;
+    if (obj->kind != ND_IDENT || obj->ident.sym == NULL)
+        return;
+    sym_t *sym = obj->ident.sym;
+    node_t *ds = sym->decl_spec;
+    if (ds == NULL || ds->decl_spec.type_spec == NULL)
+        return;
+
+    // For '.': sym must be a struct (pointer_level == 0)
+    // For '->': sym must be a pointer to struct (pointer_level > 0)
+    int expected_ptr = mem->member.is_ptr ? 1 : 0;
+    if ((sym->pointer_level > 0) != expected_ptr)
+        return;
+
+    if (ds->decl_spec.type_spec->kind != ND_STRUCT_SPEC)
+        return;
+    struct_def_t *def = ds->decl_spec.type_spec->struct_spec.def;
+    if (def == NULL)
+        return;
+    mem->member.resolved = struct_member_lookup(def, mem->member.field.str, mem->member.field.len);
+}
+
 /*
  * postfix_expression
  * : primary_expression
@@ -471,7 +658,9 @@ node_t *parser_postfix_expression(parser_t *p)
             mem->member.field.str = field->sval;
             mem->member.field.len = field->len;
             mem->member.is_ptr = 0;
+            mem->member.resolved = NULL;
             token_destroy(field);
+            parser_resolve_member(mem);
             node = mem;
 
         } else if (peek->type == TOKEN_PTR_OP) {
@@ -488,7 +677,9 @@ node_t *parser_postfix_expression(parser_t *p)
             mem->member.field.str = field->sval;
             mem->member.field.len = field->len;
             mem->member.is_ptr = 1;
+            mem->member.resolved = NULL;
             token_destroy(field);
+            parser_resolve_member(mem);
             node = mem;
 
         } else if (peek->type == TOKEN_INC_OP || peek->type == TOKEN_DEC_OP) {
@@ -1500,6 +1691,15 @@ node_t *parser_external_declaration(parser_t *p)
     node_t *decl_spec = parser_declaration_specifiers(p);
     if (decl_spec == NULL)
         return NULL;
+
+    // declaration_specifiers ';' — bare type declaration (e.g. struct definition)
+    if (parser_accept(p, ';')) {
+        node_t *n = node_create(ND_GLOBAL_DECL, decl_spec->line, decl_spec->col);
+        n->global_decl.decl_spec = decl_spec;
+        n->global_decl.declarator = NULL;
+        n->global_decl.init = NULL;
+        return n;
+    }
 
     node_t *declarator = parser_declarator(p);
     if (declarator == NULL) {

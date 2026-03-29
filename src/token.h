@@ -19,6 +19,7 @@ typedef enum {
     TOKEN_KW_FOR,        // for keyword
     TOKEN_KW_WHILE,      // while keyword
     TOKEN_KW_SIZEOF,     // sizeof keyword
+    TOKEN_KW_STRUCT,     // struct keyword
     TOKEN_INC_OP,        // ++
     TOKEN_DEC_OP,        // --
     TOKEN_PTR_OP,        // ->

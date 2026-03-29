@@ -49,3 +49,40 @@ sym_t *scope_lookup(scope_t *scope, const char *name, int name_len)
     }
     return NULL;
 }
+
+struct_def_t *struct_def_lookup(struct_def_t *list, const char *tag, int tag_len)
+{
+    for (struct_def_t *d = list; d != NULL; d = d->next) {
+        if (d->tag_len == tag_len && memcmp(d->tag, tag, (size_t)tag_len) == 0)
+            return d;
+    }
+    return NULL;
+}
+
+struct_member_t *struct_member_lookup(struct_def_t *def, const char *name, int name_len)
+{
+    for (struct_member_t *m = def->members; m != NULL; m = m->next) {
+        if (m->name_len == name_len && memcmp(m->name, name, (size_t)name_len) == 0)
+            return m;
+    }
+    return NULL;
+}
+
+void struct_member_destroy_list(struct_member_t *m)
+{
+    while (m != NULL) {
+        struct_member_t *next = m->next;
+        free(m);
+        m = next;
+    }
+}
+
+void struct_def_destroy_list(struct_def_t *d)
+{
+    while (d != NULL) {
+        struct_def_t *next = d->next;
+        struct_member_destroy_list(d->members);
+        free(d);
+        d = next;
+    }
+}

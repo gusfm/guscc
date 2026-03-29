@@ -3,14 +3,17 @@
 
 #include "token.h"
 
-/* Forward declaration — sym.h includes ast.h, so we forward-declare here */
+/* Forward declarations — sym.h includes ast.h, so we forward-declare here */
 typedef struct sym sym_t;
+typedef struct struct_def struct_def_t;
+typedef struct struct_member struct_member_t;
 
 typedef enum {
     ND_TRANSLATION_UNIT, // Top-level list of function definitions
     ND_FUNC,             // Function definition
     ND_DECL_SPEC,        // Declaration specifiers (e.g. int, char)
     ND_TYPE_SPEC,        // Type specifier leaf (void / char / int)
+    ND_STRUCT_SPEC,      // Struct specifier (tag name + resolved definition)
     ND_PARAM_DECL,       // Single parameter declaration
     ND_PARAM_LIST,       // Comma-separated parameter list
     ND_DIRECT_DECL,      // Declarator: identifier + optional ptr '*' + param list
@@ -68,7 +71,12 @@ struct node {
         } type_spec;      // used when kind == ND_TYPE_SPEC
 
         struct {
-            node_t *type_spec; // the type specifier node (e.g. int, char)
+            node_str_t tag;    // struct tag name
+            struct_def_t *def; // resolved struct definition (NULL for forward ref)
+        } struct_spec;         // used when kind == ND_STRUCT_SPEC
+
+        struct {
+            node_t *type_spec; // ND_TYPE_SPEC or ND_STRUCT_SPEC
             int pointer_level; // for abstract declarators (cast / sizeof)
         } decl_spec;           // used when kind == ND_DECL_SPEC
 
@@ -169,10 +177,11 @@ struct node {
         } call;              // used when kind == ND_CALL
 
         struct {
-            node_t *object;   // struct/pointer expression
-            node_str_t field; // member name (not null-terminated)
-            int is_ptr;       // 0 for '.', 1 for '->'
-        } member;             // used when kind == ND_MEMBER
+            node_t *object;             // struct/pointer expression
+            node_str_t field;           // member name (not null-terminated)
+            int is_ptr;                 // 0 for '.', 1 for '->'
+            struct_member_t *resolved;  // resolved member definition; NULL until resolved
+        } member;                       // used when kind == ND_MEMBER
 
         struct {
             node_t *type_node; // ND_DECL_SPEC describing the target type

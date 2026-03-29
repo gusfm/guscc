@@ -9,19 +9,25 @@
 // Forward declarations
 static void cg_node(codegen_t *cg, node_t *n);
 static void cg_expr(codegen_t *cg, node_t *n);
+static void cg_member_addr(codegen_t *cg, node_t *n);
+static void cg_member(codegen_t *cg, node_t *n);
 
 // x86-64 System V ABI integer argument registers (64-bit / 32-bit / 8-bit)
 static const char *arg_regs64[6] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
 static const char *arg_regs32[6] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
 static const char *arg_regs8[6] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b"};
 
-// Return the byte size of a sym (1 / 4 / 8)
+// Return the byte size of a sym (1 / 4 / 8 or struct size)
 static int sym_get_size(sym_t *sym)
 {
     if (sym->pointer_level > 0)
         return 8;
     if (sym->decl_spec == NULL || sym->decl_spec->decl_spec.type_spec == NULL)
         return 4;
+    if (sym->decl_spec->decl_spec.type_spec->kind == ND_STRUCT_SPEC) {
+        struct_def_t *def = sym->decl_spec->decl_spec.type_spec->struct_spec.def;
+        return def ? def->size : 4;
+    }
     switch (sym->decl_spec->decl_spec.type_spec->type_spec) {
         case ND_TYPE_CHAR:
             return 1;
@@ -201,6 +207,8 @@ static void cg_unop(codegen_t *cg, node_t *n)
         node_t *operand = n->unop.operand;
         if (operand->kind == ND_IDENT && operand->ident.sym) {
             fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", operand->ident.sym->offset);
+        } else if (operand->kind == ND_MEMBER) {
+            cg_member_addr(cg, operand);
         } else {
             fprintf(stderr, "codegen: & applied to non-addressable operand\n");
         }
@@ -252,8 +260,8 @@ static void cg_cast(codegen_t *cg, node_t *n)
 {
     cg_expr(cg, n->cast.expr);
     node_t *ds = n->cast.type_node;
-    if (ds && ds->kind == ND_DECL_SPEC && ds->decl_spec.pointer_level == 0 &&
-        ds->decl_spec.type_spec && ds->decl_spec.type_spec->type_spec == ND_TYPE_CHAR) {
+    if (ds && ds->kind == ND_DECL_SPEC && ds->decl_spec.pointer_level == 0 && ds->decl_spec.type_spec &&
+        ds->decl_spec.type_spec->kind == ND_TYPE_SPEC && ds->decl_spec.type_spec->type_spec == ND_TYPE_CHAR) {
         fprintf(cg->out, "\tmovsbl\t%%al, %%eax\n");
     }
 }
@@ -265,6 +273,10 @@ static void cg_sizeof_type(codegen_t *cg, node_t *n)
     if (ds && ds->kind == ND_DECL_SPEC) {
         if (ds->decl_spec.pointer_level > 0) {
             size = 8;
+        } else if (ds->decl_spec.type_spec && ds->decl_spec.type_spec->kind == ND_STRUCT_SPEC) {
+            struct_def_t *def = ds->decl_spec.type_spec->struct_spec.def;
+            if (def)
+                size = def->size;
         } else if (ds->decl_spec.type_spec) {
             switch (ds->decl_spec.type_spec->type_spec) {
                 case ND_TYPE_CHAR:
@@ -326,6 +338,8 @@ static void cg_lvalue_addr(codegen_t *cg, node_t *n)
     } else if (n->kind == ND_UNOP && n->unop.op == '*') {
         // *ptr — the address IS the pointer value
         cg_expr(cg, n->unop.operand);
+    } else if (n->kind == ND_MEMBER) {
+        cg_member_addr(cg, n);
     } else {
         fprintf(stderr, "codegen: unsupported lvalue kind %d\n", n->kind);
     }
@@ -346,6 +360,8 @@ static void cg_load_lvalue(codegen_t *cg, node_t *n)
     } else if (n->kind == ND_UNOP && n->unop.op == '*') {
         cg_expr(cg, n->unop.operand); // pointer in %rax
         fprintf(cg->out, "\tmovl\t(%%rax), %%eax\n");
+    } else if (n->kind == ND_MEMBER) {
+        cg_member(cg, n);
     } else {
         cg_expr(cg, n); // fallback: evaluate as expression
     }
@@ -362,6 +378,22 @@ static void cg_store_to_lvalue(codegen_t *cg, node_t *lhs)
             return;
         }
         cg_store_sym(cg, lhs->ident.sym);
+    } else if (lhs->kind == ND_MEMBER) {
+        fprintf(cg->out, "\tpushq\t%%rax\n");
+        cg_member_addr(cg, lhs);
+        fprintf(cg->out, "\tmovq\t%%rax, %%rcx\n");
+        fprintf(cg->out, "\tpopq\t%%rax\n");
+        if (lhs->member.resolved) {
+            int size = lhs->member.resolved->size;
+            if (size == 8)
+                fprintf(cg->out, "\tmovq\t%%rax, (%%rcx)\n");
+            else if (size == 1)
+                fprintf(cg->out, "\tmovb\t%%al, (%%rcx)\n");
+            else
+                fprintf(cg->out, "\tmovl\t%%eax, (%%rcx)\n");
+        } else {
+            fprintf(cg->out, "\tmovl\t%%eax, (%%rcx)\n");
+        }
     } else {
         // General lvalue: save value, compute address, restore, store
         fprintf(cg->out, "\tpushq\t%%rax\n");
@@ -370,6 +402,39 @@ static void cg_store_to_lvalue(codegen_t *cg, node_t *lhs)
         fprintf(cg->out, "\tpopq\t%%rax\n");
         fprintf(cg->out, "\tmovl\t%%eax, (%%rcx)\n");
     }
+}
+
+// Compute address of a struct member into %rax
+static void cg_member_addr(codegen_t *cg, node_t *n)
+{
+    if (n->member.resolved == NULL) {
+        fprintf(stderr, "codegen: unresolved struct member '%.*s'\n", n->member.field.len,
+                n->member.field.str);
+        cg->errors++;
+        return;
+    }
+    int offset = n->member.resolved->offset;
+    if (n->member.is_ptr)
+        cg_expr(cg, n->member.object); // pointer value → %rax
+    else
+        cg_lvalue_addr(cg, n->member.object); // struct base address → %rax
+    if (offset != 0)
+        fprintf(cg->out, "\taddq\t$%d, %%rax\n", offset);
+}
+
+// Load struct member value into %rax/%eax
+static void cg_member(codegen_t *cg, node_t *n)
+{
+    cg_member_addr(cg, n);
+    if (n->member.resolved == NULL)
+        return;
+    int size = n->member.resolved->size;
+    if (size == 8)
+        fprintf(cg->out, "\tmovq\t(%%rax), %%rax\n");
+    else if (size == 1)
+        fprintf(cg->out, "\tmovsbl\t(%%rax), %%eax\n");
+    else
+        fprintf(cg->out, "\tmovl\t(%%rax), %%eax\n");
 }
 
 // Map compound assignment operator to its base binary op token
@@ -532,6 +597,9 @@ static void cg_expr(codegen_t *cg, node_t *n)
             break;
         case ND_COMMA:
             cg_comma(cg, n);
+            break;
+        case ND_MEMBER:
+            cg_member(cg, n);
             break;
         default:
             fprintf(stderr, "codegen: unsupported expression kind %d\n", n->kind);

@@ -28,7 +28,9 @@ static int compile_and_run(const char *src, int expected_exit)
     char cmd[1024];
     int ret;
 
-    ret = compile_file(cmd);
+    snprintf(cmd, sizeof(cmd), "./guscc %s > /dev/null 2>&1", src);
+    ret = system(cmd);
+    ASSERT(ret == 0);
 
     snprintf(cmd, sizeof(cmd), "gcc %s -o %s > /dev/null 2>&1", asm_out, bin_out);
     ret = system(cmd);
@@ -221,6 +223,28 @@ static int guscc_test_for_empty_clauses(void)
     return compile_and_run("../test/files/for_empty_clauses.c", 5);
 }
 
+/* ---- Structs ---- */
+
+static int guscc_test_struct_basic(void)
+{
+    return compile_and_run("../test/files/struct_basic.c", 42);
+}
+
+static int guscc_test_struct_pointer(void)
+{
+    return compile_and_run("../test/files/struct_pointer.c", 42);
+}
+
+static int guscc_test_struct_sizeof(void)
+{
+    return compile_and_run("../test/files/struct_sizeof.c", 42);
+}
+
+static int guscc_test_struct_mixed_types(void)
+{
+    return compile_and_run("../test/files/struct_mixed_types.c", 42);
+}
+
 /* ---- Failure paths: guscc must exit non-zero ---- */
 
 static int guscc_test_fail_syntax_error(void)
@@ -247,6 +271,13 @@ static int guscc_test_fail_break_outside_loop(void)
 static int guscc_test_fail_continue_outside_loop(void)
 {
     int ret = compile_file("../test/files/fail_continue_outside_loop.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
+static int guscc_test_fail_struct_no_body(void)
+{
+    int ret = compile_file("../test/files/fail_struct_no_body.c");
     ASSERT(ret != 0);
     return 0;
 }
@@ -305,9 +336,16 @@ void guscc_test(void)
     ut_run(guscc_test_for_break);
     ut_run(guscc_test_for_empty_clauses);
 
+    /* Structs */
+    ut_run(guscc_test_struct_basic);
+    ut_run(guscc_test_struct_pointer);
+    ut_run(guscc_test_struct_sizeof);
+    ut_run(guscc_test_struct_mixed_types);
+
     /* Failure paths */
     ut_run(guscc_test_fail_syntax_error);
     ut_run(guscc_test_fail_undeclared_var);
     ut_run(guscc_test_fail_break_outside_loop);
     ut_run(guscc_test_fail_continue_outside_loop);
+    ut_run(guscc_test_fail_struct_no_body);
 }
