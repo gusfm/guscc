@@ -1,8 +1,8 @@
 # guscc
 
-A simple recursive-descent C compiler written in C99, aimed at eventual self-hosting. It supports a limited subset of C: `void`/`char`/`int` types, structs with member access (`.` and `->`), 1D fixed-size local arrays with subscript access, array-to-pointer decay, array initializers (braced lists and string literals), string literal pointer initialization, pointer arithmetic (`+`, `-`, `+=`, `-=`, `++`, `--`, comparisons, and pointer subtraction yielding an element count), multiple functions per file, local variables, parameters (including unnamed parameters in declarations), assignments, function calls, `if`/`else`, `while`, `do-while`, `for`, `break`, `continue`, `return`, and expressions.
+A recursive-descent C compiler written in C99, targeting x86-64 Linux (System V ABI). The goal is eventual self-hosting.
 
-Given a C source file, `guscc` compiles it to x86-64 assembly (`.s`). By default only errors are printed to stderr. Pass `-d` to also print three debug sections to stdout: source with line numbers, the lexer token stream, and the parser AST.
+It compiles a subset of C — covering `void`/`char`/`int` scalar types, pointers, 1D arrays, structs, pointer arithmetic, and the usual control flow (`if`/`else`, `while`, `do-while`, `for`, `break`, `continue`, `return`) — down to x86-64 assembly (`.s`). By default only errors go to stderr; pass `-d` to also dump the source with line numbers, the token stream, and the AST.
 
 ## Requirements
 
@@ -22,17 +22,17 @@ The binary is placed at `build/guscc`.
 
 ```bash
 # Compile silently (only errors to stderr)
-./build/guscc test/files/test_11.c
+./build/guscc test/files/return_literal.c
 
 # Compile with debug output (source, tokens, AST printed to stdout)
-./build/guscc -d test/files/test_11.c
+./build/guscc -d test/files/return_literal.c
 ```
 
-Both write the assembly to `test_11.s` in the **current directory**. The generated `.s` file can be assembled and linked with gcc:
+Both write the assembly to `return_literal.s` in the **current directory**. Assemble and run with gcc:
 
 ```bash
-gcc test_11.s -o test_11
-./test_11; echo $?   # prints 42
+gcc return_literal.s -o return_literal
+./return_literal; echo $?   # prints 42
 ```
 
 ## Testing
@@ -43,11 +43,11 @@ Tests must be run from `build/` because they invoke `./guscc`:
 cmake --build build && cd build && ./guscc_test
 ```
 
-Tests live in `test/` and use a custom framework (`test/ut.h`). Lexer unit tests tokenize C snippets and assert token types and values. End-to-end compiler tests compile test files, assemble the output, run the resulting binary, and verify the exit code. Failure-path tests verify that guscc exits non-zero on invalid or unsupported input.
+Tests live in `test/` and use a custom framework (`test/ut.h`). Lexer unit tests tokenize C snippets and assert token types and values. End-to-end compiler tests compile a source file, assemble the output, run the binary, and verify the exit code. Failure-path tests verify that guscc exits non-zero on invalid input.
 
 ## Architecture
 
-Pipeline: **source → lexer → parser → AST → symbol table → codegen → x86-64 assembly**
+Pipeline: **source → lexer → parser → AST + symbol table → codegen → x86-64 assembly**
 
 | Module | Role |
 |--------|------|
@@ -55,7 +55,7 @@ Pipeline: **source → lexer → parser → AST → symbol table → codegen →
 | `src/lex.{h,c}` | Lexer — emits tokens one at a time via `lex_next()` |
 | `src/ast.{h,c}` | AST node definitions (`node_t` tagged union) and debug printer |
 | `src/sym.{h,c}` | Symbol table — `sym_t`/`scope_t`, built during parsing, tracks locals and params with `%rbp` offsets |
-| `src/parser.{h,c}` | Recursive-descent parser with one-token lookahead; builds symbol table inline |
+| `src/parser.{h,c}` | Recursive-descent parser with one-token lookahead; builds AST and symbol table inline |
 | `src/codegen.{h,c}` | Code generator — walks AST, emits x86-64 System V ABI assembly |
 | `src/guscc.c` | Entry point — orchestrates the pipeline |
 
@@ -65,10 +65,10 @@ Parameters are assigned negative `%rbp` offsets in declaration order (first para
 
 ## Current limitations
 
-- Multi-dimensional arrays, `sizeof(int[5])` (array in type-name context), and array initializers for non-`char` string literals are not supported
+- No global variable declarations
+- Max 6 integer parameters (System V AMD64 ABI register arguments); no floating-point parameters
+- Pointer arithmetic only works on local pointer variables, not pointer-typed parameters
+- 1D arrays only; no multi-dimensional arrays or `sizeof(int[5])` (array in type-name context)
 - Only named struct definitions; no anonymous structs, no nested struct types, no struct assignment
 - Forward function calls (callee defined later in the file) produce an "undeclared identifier" warning; forward declarations with unnamed parameters are supported
 - Parenthesized abstract declarators (function pointer syntax like `int (*)(int)`) are parsed but not code-generated
-- Global variable declarations are not yet supported
-- Only up to 6 integer parameters (System V AMD64 ABI register arguments)
-- Pointer arithmetic on pointer-typed function parameters is not yet supported (only local pointer variables)
