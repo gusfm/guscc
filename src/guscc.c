@@ -110,7 +110,7 @@ void debug_file(char *buf)
     }
 }
 
-int main(int argc, char **argv)
+int guscc(int argc, char **argv)
 {
     int debug = 0;
     int asm_only = 0;

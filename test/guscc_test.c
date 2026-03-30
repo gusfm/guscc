@@ -2,14 +2,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include "guscc.h"
 #include "ut.h"
 
-/* Run guscc on a source file. Prints the command. Returns guscc exit status. */
+/* Compile a source file with guscc. Returns guscc exit status. */
 static int compile_file(char *file)
 {
-    char str[1024];
-    snprintf(str, sizeof(str), "./guscc %s > /dev/null 2>&1", file);
-    return system(str);
+    char *argv[] = {"guscc", file, NULL};
+    return guscc(2, argv);
 }
 
 /* Compile src to a binary with guscc, execute and assert exit code == expected.
@@ -24,11 +24,8 @@ static int compile_and_run(const char *src, int expected_exit)
     char bin_out[256];
     snprintf(bin_out, sizeof(bin_out), "./%.*s_out", stem_len, filename);
 
-    char cmd[1024];
-    int ret;
-
-    snprintf(cmd, sizeof(cmd), "./guscc -o %s %s > /dev/null 2>&1", bin_out, src);
-    ret = system(cmd);
+    char *argv[] = {"guscc", "-o", bin_out, (char *)src, NULL};
+    int ret = guscc(4, argv);
     ASSERT(ret == 0);
 
     ret = system(bin_out);
