@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ast.h"
+
 scope_t *scope_new(scope_t *parent)
 {
     scope_t *s = malloc(sizeof(scope_t));
@@ -73,6 +75,7 @@ void struct_member_destroy_list(struct_member_t *m)
 {
     while (m != NULL) {
         struct_member_t *next = m->next;
+        node_destroy(m->decl_spec);
         free(m);
         m = next;
     }

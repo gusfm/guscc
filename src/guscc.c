@@ -73,16 +73,6 @@ int lexer(char *buf, int size)
     return 0;
 }
 
-node_t *parser(char *buf, int size)
-{
-    parser_t p;
-
-    parser_init(&p, buf, size);
-    node_t *ast = parser_exec(&p);
-    parser_finish(&p);
-    return ast;
-}
-
 int codegen(node_t *ast, const char *outpath)
 {
     FILE *out = fopen(outpath, "w");
@@ -174,12 +164,15 @@ int guscc(int argc, char **argv)
         }
     }
 
-    node_t *ast = parser(buf, size);
+    parser_t p;
+    parser_init(&p, buf, (size_t)size);
+    node_t *ast = parser_exec(&p);
     if (debug && ast != NULL) {
         printf("\nParser debug output:\n");
         ast_print(ast, 0);
     }
     if (ast == NULL) {
+        parser_finish(&p);
         free(buf);
         return -1;
     }
@@ -187,6 +180,7 @@ int guscc(int argc, char **argv)
     if (asm_only) {
         int ret = codegen(ast, outpath);
         node_destroy(ast);
+        parser_finish(&p);
         free(buf);
         return ret;
     }
@@ -197,6 +191,7 @@ int guscc(int argc, char **argv)
     if (fd < 0) {
         perror("mkstemp");
         node_destroy(ast);
+        parser_finish(&p);
         free(buf);
         return -1;
     }
@@ -209,6 +204,7 @@ int guscc(int argc, char **argv)
 
     int ret = codegen(ast, asmfile);
     node_destroy(ast);
+    parser_finish(&p);
     free(buf);
     if (ret != 0) {
         unlink(asmfile);

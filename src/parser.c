@@ -88,7 +88,7 @@ bool parser_accept(parser_t *p, token_type_t type)
 {
     token_t *t = parser_peek(p);
     if (t->type == type) {
-        parser_next(p); // consume it
+        token_destroy(parser_next(p)); // consume and free
         return true;
     }
     return false;
@@ -345,6 +345,7 @@ static node_t *parser_direct_declarator(parser_t *p, decl_mode_t mode)
         n = node_create(ND_DIRECT_DECL, ident->line, ident->col);
         n->direct_decl.ident.str = ident->sval;
         n->direct_decl.ident.len = ident->len;
+        token_destroy(ident);
     } else if (mode == DECL_CONCRETE) {
         // Must have identifier — emit error via expect_token
         parser_expect_token(p, TOKEN_IDENT);
@@ -699,7 +700,7 @@ node_t *parser_primary_expression(parser_t *p)
         return n;
     }
     if (tok->type == '(') {
-        parser_next(p); // consume '('
+        token_destroy(parser_next(p)); // consume '('
         node_t *inner = parser_expression(p);
         if (inner == NULL)
             return NULL;
@@ -921,7 +922,7 @@ node_t *parser_unary_expression(parser_t *p)
         if (p1 != NULL && p1->type == '(') {
             token_t *p2 = parser_peek2(p);
             if (p2 != NULL && parser_is_type_token(p2->type)) {
-                parser_next(p); // consume '('
+                token_destroy(parser_next(p)); // consume '('
                 node_t *type_node = parser_type_name(p);
                 if (type_node == NULL)
                     return NULL;
@@ -1461,28 +1462,38 @@ node_t *parser_expression_statement(parser_t *p)
 node_t *parser_selection_statement(parser_t *p)
 {
     token_t *t = parser_next(p);
-    if (t->type == TOKEN_KW_IF) {
+    int line = t->line, col = t->col;
+    token_type_t ttype = t->type;
+    token_destroy(t);
+    if (ttype == TOKEN_KW_IF) {
         if (!parser_expect(p, '('))
             return NULL;
         node_t *cond = parser_expression(p);
         if (!cond)
             return NULL;
-        if (!parser_expect(p, ')'))
+        if (!parser_expect(p, ')')) {
+            node_destroy(cond);
             return NULL;
+        }
 
         node_t *then = parser_statement(p);
-        if (!then)
+        if (!then) {
+            node_destroy(cond);
             return NULL;
+        }
 
         node_t *else_ = NULL;
         if (parser_peek(p)->type == TOKEN_KW_ELSE) {
-            parser_next(p); // consume 'else'
+            token_destroy(parser_next(p)); // consume 'else'
             else_ = parser_statement(p);
-            if (!else_)
+            if (!else_) {
+                node_destroy(cond);
+                node_destroy(then);
                 return NULL;
+            }
         }
 
-        node_t *n = node_create(ND_IF_STMT, t->line, t->col);
+        node_t *n = node_create(ND_IF_STMT, line, col);
         n->if_stmt.cond = cond;
         n->if_stmt.then = then;
         n->if_stmt.else_ = else_;
