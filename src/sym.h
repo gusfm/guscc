@@ -11,6 +11,7 @@ typedef struct sym {
     int pointer_level;
     int array_size;  /* 0 = not array, positive = element count */
     int offset;      /* negative offset from %rbp (base of array for arrays) */
+    int is_global;   /* 0 = local/param, 1 = global variable */
     struct sym *next; /* next symbol in the same scope */
 } sym_t;
 

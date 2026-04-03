@@ -11,6 +11,7 @@ typedef struct {
     token_t *next_token2; // Second lookahead (NULL = not loaded)
     scope_t *scope;       // Current local scope; NULL outside a function
     scope_t *func_scope;      // Flat global scope for function names
+    scope_t *global_scope;    // Global variable symbol scope
     int frame_offset;         // Running stack offset (0 at function entry, decrements)
     struct_def_t *struct_defs; // Registry of parsed struct definitions
 } parser_t;

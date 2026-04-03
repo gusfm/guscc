@@ -226,6 +226,7 @@ struct node {
             node_t *decl_spec;  // ND_DECL_SPEC describing the type
             node_t *declarator; // ND_DIRECT_DECL — name + pointer_level; NULL for bare type decl
             node_t *init;       // optional initializer expr; NULL if absent
+            sym_t *sym;         // resolved symbol (owned by parser global_scope, NOT freed here)
         } global_decl;          // used when kind == ND_GLOBAL_DECL
 
         struct {

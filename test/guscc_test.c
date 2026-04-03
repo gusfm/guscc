@@ -422,6 +422,65 @@ static int guscc_test_fail_deref_nonptr(void)
     return 0;
 }
 
+/* ---- Global variables ---- */
+
+static int guscc_test_global_var_int(void)
+{
+    return compile_and_run("../test/files/global_var_int.c", 42);
+}
+
+static int guscc_test_global_var_uninit(void)
+{
+    return compile_and_run("../test/files/global_var_uninit.c", 42);
+}
+
+static int guscc_test_global_var_array(void)
+{
+    return compile_and_run("../test/files/global_var_array.c", 42);
+}
+
+static int guscc_test_global_var_array_uninit(void)
+{
+    return compile_and_run("../test/files/global_var_array_uninit.c", 42);
+}
+
+static int guscc_test_global_var_string(void)
+{
+    return compile_and_run("../test/files/global_var_string.c", 42);
+}
+
+static int guscc_test_global_var_pointer(void)
+{
+    return compile_and_run("../test/files/global_var_pointer.c", 42);
+}
+
+static int guscc_test_global_var_shadow(void)
+{
+    return compile_and_run("../test/files/global_var_shadow.c", 42);
+}
+
+static int guscc_test_global_var_cross_func(void)
+{
+    return compile_and_run("../test/files/global_var_cross_func.c", 42);
+}
+
+static int guscc_test_global_var_struct(void)
+{
+    return compile_and_run("../test/files/global_var_struct.c", 42);
+}
+
+static int guscc_test_global_var_char(void)
+{
+    return compile_and_run("../test/files/global_var_char.c", 42);
+}
+
+static int guscc_test_fail_global_nonconstant_init(void)
+{
+    int ret = compile_file("../test/files/fail_global_nonconstant_init.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -513,6 +572,18 @@ void guscc_test(void)
     ut_run(guscc_test_ptr_arith_array_decay);
     ut_run(guscc_test_ptr_char_arith);
 
+    /* Global variables */
+    ut_run(guscc_test_global_var_int);
+    ut_run(guscc_test_global_var_uninit);
+    ut_run(guscc_test_global_var_array);
+    ut_run(guscc_test_global_var_array_uninit);
+    ut_run(guscc_test_global_var_string);
+    ut_run(guscc_test_global_var_pointer);
+    ut_run(guscc_test_global_var_shadow);
+    ut_run(guscc_test_global_var_cross_func);
+    ut_run(guscc_test_global_var_struct);
+    ut_run(guscc_test_global_var_char);
+
     /* Failure paths */
     ut_run(guscc_test_fail_syntax_error);
     ut_run(guscc_test_fail_undeclared_var);
@@ -522,4 +593,5 @@ void guscc_test(void)
     ut_run(guscc_test_fail_unnamed_param_def);
     ut_run(guscc_test_fail_array_unsized);
     ut_run(guscc_test_fail_deref_nonptr);
+    ut_run(guscc_test_fail_global_nonconstant_init);
 }

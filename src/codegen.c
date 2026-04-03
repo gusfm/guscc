@@ -120,6 +120,15 @@ void codegen_finish(codegen_t *cg)
     cg->out = NULL;
 }
 
+static long cg_node_int_val(node_t *n)
+{
+    char tmp[64];
+    int len = n->num.val.len < 63 ? n->num.val.len : 63;
+    memcpy(tmp, n->num.val.str, len);
+    tmp[len] = '\0';
+    return strtol(tmp, NULL, 10);
+}
+
 static void cg_num(codegen_t *cg, node_t *n)
 {
     char tmp[64];
@@ -345,7 +354,11 @@ static void cg_unop(codegen_t *cg, node_t *n)
     if (op == '&') {
         node_t *operand = n->unop.operand;
         if (operand->kind == ND_IDENT && operand->ident.sym) {
-            fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", operand->ident.sym->offset);
+            if (operand->ident.sym->is_global)
+                fprintf(cg->out, "\tleaq\t%.*s(%%rip), %%rax\n", operand->ident.sym->name_len,
+                        operand->ident.sym->name);
+            else
+                fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", operand->ident.sym->offset);
         } else if (operand->kind == ND_MEMBER) {
             cg_member_addr(cg, operand);
         } else if (operand->kind == ND_SUBSCRIPT) {
@@ -391,17 +404,13 @@ static void cg_unop(codegen_t *cg, node_t *n)
         sym_t *sym = operand->ident.sym;
         int size = sym_get_size(sym);
         int delta = (sym->pointer_level > 0) ? sym_elem_size(sym) : 1;
-        if (op == TOKEN_INC_OP) {
-            if (size == 8)
-                fprintf(cg->out, "\taddq\t$%d, %d(%%rbp)\n", delta, sym->offset);
-            else
-                fprintf(cg->out, "\taddl\t$%d, %d(%%rbp)\n", delta, sym->offset);
-        } else {
-            if (size == 8)
-                fprintf(cg->out, "\tsubq\t$%d, %d(%%rbp)\n", delta, sym->offset);
-            else
-                fprintf(cg->out, "\tsubl\t$%d, %d(%%rbp)\n", delta, sym->offset);
-        }
+        const char *add_op = (size == 8) ? "addq" : "addl";
+        const char *sub_op = (size == 8) ? "subq" : "subl";
+        const char *instr = (op == TOKEN_INC_OP) ? add_op : sub_op;
+        if (sym->is_global)
+            fprintf(cg->out, "\t%s\t$%d, %.*s(%%rip)\n", instr, delta, sym->name_len, sym->name);
+        else
+            fprintf(cg->out, "\t%s\t$%d, %d(%%rbp)\n", instr, delta, sym->offset);
         cg_load_sym(cg, sym); // return updated value
         return;
     }
@@ -489,6 +498,15 @@ static void cg_comma(codegen_t *cg, node_t *n)
 static void cg_load_sym(codegen_t *cg, sym_t *sym)
 {
     int size = sym_get_size(sym);
+    if (sym->is_global) {
+        if (size == 8)
+            fprintf(cg->out, "\tmovq\t%.*s(%%rip), %%rax\n", sym->name_len, sym->name);
+        else if (size == 1)
+            fprintf(cg->out, "\tmovsbl\t%.*s(%%rip), %%eax\n", sym->name_len, sym->name);
+        else
+            fprintf(cg->out, "\tmovl\t%.*s(%%rip), %%eax\n", sym->name_len, sym->name);
+        return;
+    }
     if (size == 8)
         fprintf(cg->out, "\tmovq\t%d(%%rbp), %%rax\n", sym->offset);
     else if (size == 1)
@@ -497,10 +515,19 @@ static void cg_load_sym(codegen_t *cg, sym_t *sym)
         fprintf(cg->out, "\tmovl\t%d(%%rbp), %%eax\n", sym->offset);
 }
 
-// Store %rax/%eax to a sym_t's stack slot
+// Store %rax/%eax to a sym_t's stack slot (or global via %rip)
 static void cg_store_sym(codegen_t *cg, sym_t *sym)
 {
     int size = sym_get_size(sym);
+    if (sym->is_global) {
+        if (size == 8)
+            fprintf(cg->out, "\tmovq\t%%rax, %.*s(%%rip)\n", sym->name_len, sym->name);
+        else if (size == 1)
+            fprintf(cg->out, "\tmovb\t%%al, %.*s(%%rip)\n", sym->name_len, sym->name);
+        else
+            fprintf(cg->out, "\tmovl\t%%eax, %.*s(%%rip)\n", sym->name_len, sym->name);
+        return;
+    }
     if (size == 8)
         fprintf(cg->out, "\tmovq\t%%rax, %d(%%rbp)\n", sym->offset);
     else if (size == 1)
@@ -519,7 +546,11 @@ static void cg_lvalue_addr(codegen_t *cg, node_t *n)
             cg->errors++;
             return;
         }
-        fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", n->ident.sym->offset);
+        if (n->ident.sym->is_global)
+            fprintf(cg->out, "\tleaq\t%.*s(%%rip), %%rax\n", n->ident.sym->name_len,
+                    n->ident.sym->name);
+        else
+            fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", n->ident.sym->offset);
     } else if (n->kind == ND_UNOP && n->unop.op == '*') {
         // *ptr — the address IS the pointer value
         cg_expr(cg, n->unop.operand);
@@ -678,8 +709,12 @@ static void cg_subscript_addr(codegen_t *cg, node_t *n)
 
     // Step 2: compute base address → %rax
     if (arr->kind == ND_IDENT && arr->ident.sym && arr->ident.sym->array_size > 0) {
-        // Local array: base is stack slot
-        fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", arr->ident.sym->offset);
+        // Array: base is stack slot (local) or global label
+        if (arr->ident.sym->is_global)
+            fprintf(cg->out, "\tleaq\t%.*s(%%rip), %%rax\n", arr->ident.sym->name_len,
+                    arr->ident.sym->name);
+        else
+            fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", arr->ident.sym->offset);
     } else {
         // Pointer: evaluate to get pointer value (may clobber %rcx, so save it first)
         fprintf(cg->out, "\tpushq\t%%rcx\n");
@@ -747,7 +782,11 @@ static void cg_ident(codegen_t *cg, node_t *n)
     }
     if (n->ident.sym->array_size > 0) {
         // Array decays to pointer: yield base address of first element
-        fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", n->ident.sym->offset);
+        if (n->ident.sym->is_global)
+            fprintf(cg->out, "\tleaq\t%.*s(%%rip), %%rax\n", n->ident.sym->name_len,
+                    n->ident.sym->name);
+        else
+            fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", n->ident.sym->offset);
     } else {
         cg_load_sym(cg, n->ident.sym);
     }
@@ -950,17 +989,13 @@ static void cg_postop(codegen_t *cg, node_t *n)
 
     // Increment or decrement the variable in place
     int delta = (sym->pointer_level > 0) ? sym_elem_size(sym) : 1;
-    if (n->postop.op == TOKEN_INC_OP) {
-        if (size == 8)
-            fprintf(cg->out, "\taddq\t$%d, %d(%%rbp)\n", delta, sym->offset);
-        else
-            fprintf(cg->out, "\taddl\t$%d, %d(%%rbp)\n", delta, sym->offset);
-    } else {
-        if (size == 8)
-            fprintf(cg->out, "\tsubq\t$%d, %d(%%rbp)\n", delta, sym->offset);
-        else
-            fprintf(cg->out, "\tsubl\t$%d, %d(%%rbp)\n", delta, sym->offset);
-    }
+    const char *add_op = (size == 8) ? "addq" : "addl";
+    const char *sub_op = (size == 8) ? "subq" : "subl";
+    const char *instr = (n->postop.op == TOKEN_INC_OP) ? add_op : sub_op;
+    if (sym->is_global)
+        fprintf(cg->out, "\t%s\t$%d, %.*s(%%rip)\n", instr, delta, sym->name_len, sym->name);
+    else
+        fprintf(cg->out, "\t%s\t$%d, %d(%%rbp)\n", instr, delta, sym->offset);
 }
 
 static void cg_expr(codegen_t *cg, node_t *n)
@@ -1227,8 +1262,103 @@ static void cg_func(codegen_t *cg, node_t *n)
     fprintf(cg->out, "\tret\n");
 }
 
+static void cg_global_decl(codegen_t *cg, node_t *n)
+{
+    sym_t *sym = n->global_decl.sym;
+    if (sym == NULL)
+        return; // bare type decl (e.g. struct definition)
+
+    int size = sym_get_size(sym);
+    int total = (sym->array_size > 0) ? sym->array_size * size : size;
+    int align = size < 8 ? size : 8;
+    // Use struct alignment for struct globals
+    if (sym->pointer_level == 0 && sym->decl_spec && sym->decl_spec->decl_spec.type_spec &&
+        sym->decl_spec->decl_spec.type_spec->kind == ND_STRUCT_SPEC) {
+        struct_def_t *def = sym->decl_spec->decl_spec.type_spec->struct_spec.def;
+        if (def) {
+            total = def->size;
+            align = def->align;
+        }
+    }
+    node_t *init = n->global_decl.init;
+
+    fprintf(cg->out, "\t.globl\t%.*s\n", sym->name_len, sym->name);
+
+    if (init == NULL) {
+        // Uninitialized — .comm (zero-initialized by linker)
+        fprintf(cg->out, "\t.comm\t%.*s, %d, %d\n", sym->name_len, sym->name, total, align);
+        return;
+    }
+
+    // Initialized — .data section
+    fprintf(cg->out, "\t.data\n");
+    fprintf(cg->out, "\t.align\t%d\n", align);
+    fprintf(cg->out, "%.*s:\n", sym->name_len, sym->name);
+
+    if (sym->array_size > 0 && init->kind == ND_STR) {
+        // char array from string literal: e.g. char s[20] = "hello"
+        const char *src = init->str.val.str; // includes quotes
+        int slen = init->str.val.len;
+        fprintf(cg->out, "\t.string\t%.*s\n", slen, src);
+        // .string adds null terminator; pad remaining bytes
+        int used = slen - 1; // approximate: chars between quotes + null
+        if (total > used)
+            fprintf(cg->out, "\t.zero\t%d\n", total - used);
+    } else if (sym->array_size > 0 && init->kind == ND_INITIALIZER_LIST) {
+        // Array with initializer list: e.g. int arr[5] = {1,2,3,4,5}
+        int count = init->initializer_list.count;
+        if (count > sym->array_size)
+            count = sym->array_size;
+        for (int i = 0; i < count; i++) {
+            node_t *elem = init->initializer_list.items[i];
+            if (elem->kind != ND_NUM) {
+                fprintf(stderr, "%d:%d: error: global array initializer must be a constant\n",
+                        elem->line, elem->col);
+                cg->errors++;
+                continue;
+            }
+            long val = cg_node_int_val(elem);
+            if (size == 8)
+                fprintf(cg->out, "\t.quad\t%ld\n", val);
+            else if (size == 1)
+                fprintf(cg->out, "\t.byte\t%ld\n", val);
+            else
+                fprintf(cg->out, "\t.long\t%ld\n", val);
+        }
+        int remaining = (sym->array_size - count) * size;
+        if (remaining > 0)
+            fprintf(cg->out, "\t.zero\t%d\n", remaining);
+    } else if (init->kind == ND_NUM) {
+        // Scalar integer: e.g. int x = 42
+        long val = cg_node_int_val(init);
+        if (size == 8)
+            fprintf(cg->out, "\t.quad\t%ld\n", val);
+        else if (size == 1)
+            fprintf(cg->out, "\t.byte\t%ld\n", val);
+        else
+            fprintf(cg->out, "\t.long\t%ld\n", val);
+    } else if (init->kind == ND_STR && sym->pointer_level > 0) {
+        // Pointer to string literal: e.g. char *p = "hello"
+        int id = cg->str_count++;
+        fprintf(cg->out, "\t.quad\t.LC%d\n", id);
+        fprintf(cg->out, "\t.section\t.rodata\n");
+        fprintf(cg->out, ".LC%d:\n", id);
+        fprintf(cg->out, "\t.string\t%.*s\n", init->str.val.len, init->str.val.str);
+        fprintf(cg->out, "\t.data\n");
+    } else {
+        fprintf(stderr, "%d:%d: error: unsupported global initializer\n", init->line, init->col);
+        cg->errors++;
+    }
+}
+
 static void cg_translation_unit(codegen_t *cg, node_t *n)
 {
+    // Emit global variable definitions first
+    for (int i = 0; i < n->translation_unit.ndecls; i++)
+        cg_global_decl(cg, n->translation_unit.decls[i]);
+
+    // Switch to .text for functions
+    fprintf(cg->out, "\t.text\n");
     for (int i = 0; i < n->translation_unit.nfuncs; i++)
         cg_node(cg, n->translation_unit.funcs[i]);
     // Mark stack as non-executable (required by modern Linux toolchains)
@@ -1275,6 +1405,9 @@ static void cg_node(codegen_t *cg, node_t *n)
             break;
         case ND_LOCAL_DECL:
             cg_local_decl(cg, n);
+            break;
+        case ND_GLOBAL_DECL:
+            cg_global_decl(cg, n);
             break;
         case ND_DECL_SPEC:
         case ND_TYPE_SPEC:

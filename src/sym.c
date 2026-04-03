@@ -37,6 +37,7 @@ sym_t *scope_define(scope_t *scope, const char *name, int name_len, node_t *decl
     s->pointer_level = pointer_level;
     s->array_size = array_size;
     s->offset = offset;
+    s->is_global = 0;
     s->next = scope->syms;
     scope->syms = s;
     return s;

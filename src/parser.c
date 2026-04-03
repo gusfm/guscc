@@ -34,6 +34,7 @@ void parser_init(parser_t *p, char *buf, size_t size)
     p->next_token2 = NULL;
     p->scope = NULL;
     p->func_scope = scope_new(NULL);
+    p->global_scope = scope_new(NULL);
     p->frame_offset = 0;
     p->struct_defs = NULL;
 }
@@ -52,6 +53,11 @@ void parser_finish(parser_t *p)
         sym_destroy_list(p->func_scope->syms);
         scope_free(p->func_scope);
         p->func_scope = NULL;
+    }
+    if (p->global_scope) {
+        sym_destroy_list(p->global_scope->syms);
+        scope_free(p->global_scope);
+        p->global_scope = NULL;
     }
     struct_def_destroy_list(p->struct_defs);
     p->struct_defs = NULL;
@@ -676,6 +682,8 @@ node_t *parser_primary_expression(parser_t *p)
             n->ident.sym = scope_lookup(p->scope, tok->sval, tok->len);
             if (n->ident.sym == NULL)
                 n->ident.sym = scope_lookup(p->func_scope, tok->sval, tok->len);
+            if (n->ident.sym == NULL)
+                n->ident.sym = scope_lookup(p->global_scope, tok->sval, tok->len);
             if (n->ident.sym == NULL)
                 fprintf(stderr, "%d:%d: warning: undeclared identifier '%.*s'\n", tok->line,
                         tok->col, tok->len, tok->sval);
@@ -1842,6 +1850,18 @@ static node_t *parser_declaration_body(parser_t *p, node_t *decl_spec, node_t *d
     n->global_decl.decl_spec = decl_spec;
     n->global_decl.declarator = declarator;
     n->global_decl.init = init;
+    if (declarator != NULL && declarator->direct_decl.param_list == NULL) {
+        // Variable declaration (not a forward function declaration)
+        int pointer_level = declarator->direct_decl.pointer_level;
+        int array_size = declarator->direct_decl.array_size;
+        sym_t *sym = scope_define(p->global_scope, declarator->direct_decl.ident.str,
+                                  declarator->direct_decl.ident.len, decl_spec, pointer_level,
+                                  array_size, 0);
+        sym->is_global = 1;
+        n->global_decl.sym = sym;
+    } else {
+        n->global_decl.sym = NULL;
+    }
     return n;
 }
 
