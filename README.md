@@ -38,7 +38,7 @@ The binary is placed at `build/guscc`.
 
 ## Testing
 
-Tests must be run from `build/` because they invoke `./guscc`:
+Tests must be run from `build/` because test file paths are relative (`../test/files/`):
 
 ```bash
 cmake --build build && cd build && ./guscc_test
@@ -56,7 +56,7 @@ Pipeline: **source → lexer → parser → AST + symbol table → codegen → x
 | `src/lex.{h,c}` | Lexer — emits tokens one at a time via `lex_next()` |
 | `src/ast.{h,c}` | AST node definitions (`node_t` tagged union) and debug printer |
 | `src/sym.{h,c}` | Symbol table — `sym_t`/`scope_t`, built during parsing, tracks locals and params with `%rbp` offsets |
-| `src/parser.{h,c}` | Recursive-descent parser with one-token lookahead; builds AST and symbol table inline |
+| `src/parser.{h,c}` | Recursive-descent parser with two-token lookahead; builds AST and symbol table inline |
 | `src/codegen.{h,c}` | Code generator — walks AST, emits x86-64 System V ABI assembly |
 | `src/guscc.c` | Entry point — orchestrates the pipeline |
 
