@@ -63,6 +63,7 @@ Parameters are assigned negative `%rbp` offsets in declaration order (first para
 - Forward function calls (callee defined later) produce an "undeclared identifier" warning; forward declarations with unnamed parameters are supported
 - Variadic functions (`...`) supported in declarations and definitions; ellipsis must follow at least one named parameter per the C grammar (`parameter_list ',' ELLIPSIS`); `va_list`/`va_start`/`va_arg` are not built-in; all calls emit `xorl %eax, %eax` (zero SSE args) for System V ABI compliance
 - Parenthesized abstract declarators (function pointer syntax) are parsed but not code-generated
+- `short` (2 bytes) and `long` (8 bytes) type specifiers supported; combined forms accepted: `short int`, `long int`, `long long`, `long long int`; both `long` and `long long` are 8 bytes on x86-64; arithmetic on `short`/`long` values uses 32-bit operations (values >2³¹ will truncate), but load/store correctly use the proper width (16-bit `movw`/`movswl` for `short`, 64-bit `movq` for `long`)
 - `switch`/`case`/`default` supported with fall-through semantics and `break`; case values must be integer literals (or negated integer literals); no computed gotos or range expressions
 - Global variable declarations supported: initialized and uninitialized scalars, arrays, char arrays from string literals, and pointer-to-string globals; all use `%rip`-relative addressing; no `static`/`extern` yet; struct globals must be uninitialized
 

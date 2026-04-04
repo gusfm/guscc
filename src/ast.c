@@ -221,8 +221,12 @@ static const char *type_spec_to_str(int type_spec)
             return "void";
         case ND_TYPE_CHAR:
             return "char";
+        case ND_TYPE_SHORT:
+            return "short";
         case ND_TYPE_INT:
             return "int";
+        case ND_TYPE_LONG:
+            return "long";
     }
     return "invalid type";
 }

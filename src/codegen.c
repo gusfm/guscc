@@ -22,6 +22,7 @@ static void cg_array_init_list(codegen_t *cg, sym_t *sym, node_t *n);
 // x86-64 System V ABI integer argument registers (64-bit / 32-bit / 8-bit)
 static const char *arg_regs64[6] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
 static const char *arg_regs32[6] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+static const char *arg_regs16[6] = {"%di", "%si", "%dx", "%cx", "%r8w", "%r9w"};
 static const char *arg_regs8[6] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b"};
 
 // Return the byte size of a sym (1 / 4 / 8 or struct size)
@@ -40,8 +41,12 @@ static int sym_get_size(sym_t *sym)
     switch (sym->decl_spec->decl_spec.type_spec->type_spec) {
         case ND_TYPE_CHAR:
             return 1;
+        case ND_TYPE_SHORT:
+            return 2;
         case ND_TYPE_INT:
             return 4;
+        case ND_TYPE_LONG:
+            return 8;
         case ND_TYPE_VOID:
             return 1;
     }
@@ -67,9 +72,11 @@ static int sym_elem_size(sym_t *sym)
         if (ts->kind == ND_ENUM_SPEC)
             return 4;
         switch (ts->type_spec) {
-            case ND_TYPE_CHAR: return 1;
-            case ND_TYPE_INT:  return 4;
-            default:           return 1;
+            case ND_TYPE_CHAR:  return 1;
+            case ND_TYPE_SHORT: return 2;
+            case ND_TYPE_INT:   return 4;
+            case ND_TYPE_LONG:  return 8;
+            default:            return 1;
         }
     }
     // array (pointer_level==0): sym_get_size gives the element size
@@ -395,6 +402,8 @@ static void cg_unop(codegen_t *cg, node_t *n)
         cg_expr(cg, n->unop.operand); // pointer → %rax
         if (elem == 8)
             fprintf(cg->out, "\tmovq\t(%%rax), %%rax\n");
+        else if (elem == 2)
+            fprintf(cg->out, "\tmovswl\t(%%rax), %%eax\n");
         else if (elem == 1)
             fprintf(cg->out, "\tmovsbl\t(%%rax), %%eax\n");
         else
@@ -413,8 +422,8 @@ static void cg_unop(codegen_t *cg, node_t *n)
         sym_t *sym = operand->ident.sym;
         int size = sym_get_size(sym);
         int delta = (sym->pointer_level > 0) ? sym_elem_size(sym) : 1;
-        const char *add_op = (size == 8) ? "addq" : "addl";
-        const char *sub_op = (size == 8) ? "subq" : "subl";
+        const char *add_op = (size == 8) ? "addq" : (size == 2) ? "addw" : "addl";
+        const char *sub_op = (size == 8) ? "subq" : (size == 2) ? "subw" : "subl";
         const char *instr = (op == TOKEN_INC_OP) ? add_op : sub_op;
         if (sym->is_global)
             fprintf(cg->out, "\t%s\t$%d, %.*s(%%rip)\n", instr, delta, sym->name_len, sym->name);
@@ -463,9 +472,11 @@ static void cg_cast(codegen_t *cg, node_t *n)
     cg_expr(cg, n->cast.expr);
     node_t *ds = n->cast.type_node;
     if (ds && ds->kind == ND_DECL_SPEC && ds->decl_spec.pointer_level == 0 &&
-        ds->decl_spec.type_spec && ds->decl_spec.type_spec->kind == ND_TYPE_SPEC &&
-        ds->decl_spec.type_spec->type_spec == ND_TYPE_CHAR) {
-        fprintf(cg->out, "\tmovsbl\t%%al, %%eax\n");
+        ds->decl_spec.type_spec && ds->decl_spec.type_spec->kind == ND_TYPE_SPEC) {
+        if (ds->decl_spec.type_spec->type_spec == ND_TYPE_CHAR)
+            fprintf(cg->out, "\tmovsbl\t%%al, %%eax\n");
+        else if (ds->decl_spec.type_spec->type_spec == ND_TYPE_SHORT)
+            fprintf(cg->out, "\tmovswl\t%%ax, %%eax\n");
     }
 }
 
@@ -487,8 +498,14 @@ static void cg_sizeof_type(codegen_t *cg, node_t *n)
                 case ND_TYPE_CHAR:
                     size = 1;
                     break;
+                case ND_TYPE_SHORT:
+                    size = 2;
+                    break;
                 case ND_TYPE_INT:
                     size = 4;
+                    break;
+                case ND_TYPE_LONG:
+                    size = 8;
                     break;
                 case ND_TYPE_VOID:
                     size = 1;
@@ -512,6 +529,8 @@ static void cg_load_sym(codegen_t *cg, sym_t *sym)
     if (sym->is_global) {
         if (size == 8)
             fprintf(cg->out, "\tmovq\t%.*s(%%rip), %%rax\n", sym->name_len, sym->name);
+        else if (size == 2)
+            fprintf(cg->out, "\tmovswl\t%.*s(%%rip), %%eax\n", sym->name_len, sym->name);
         else if (size == 1)
             fprintf(cg->out, "\tmovsbl\t%.*s(%%rip), %%eax\n", sym->name_len, sym->name);
         else
@@ -520,6 +539,8 @@ static void cg_load_sym(codegen_t *cg, sym_t *sym)
     }
     if (size == 8)
         fprintf(cg->out, "\tmovq\t%d(%%rbp), %%rax\n", sym->offset);
+    else if (size == 2)
+        fprintf(cg->out, "\tmovswl\t%d(%%rbp), %%eax\n", sym->offset);
     else if (size == 1)
         fprintf(cg->out, "\tmovsbl\t%d(%%rbp), %%eax\n", sym->offset);
     else
@@ -533,6 +554,8 @@ static void cg_store_sym(codegen_t *cg, sym_t *sym)
     if (sym->is_global) {
         if (size == 8)
             fprintf(cg->out, "\tmovq\t%%rax, %.*s(%%rip)\n", sym->name_len, sym->name);
+        else if (size == 2)
+            fprintf(cg->out, "\tmovw\t%%ax, %.*s(%%rip)\n", sym->name_len, sym->name);
         else if (size == 1)
             fprintf(cg->out, "\tmovb\t%%al, %.*s(%%rip)\n", sym->name_len, sym->name);
         else
@@ -541,6 +564,8 @@ static void cg_store_sym(codegen_t *cg, sym_t *sym)
     }
     if (size == 8)
         fprintf(cg->out, "\tmovq\t%%rax, %d(%%rbp)\n", sym->offset);
+    else if (size == 2)
+        fprintf(cg->out, "\tmovw\t%%ax, %d(%%rbp)\n", sym->offset);
     else if (size == 1)
         fprintf(cg->out, "\tmovb\t%%al, %d(%%rbp)\n", sym->offset);
     else
@@ -591,6 +616,8 @@ static void cg_load_lvalue(codegen_t *cg, node_t *n)
         cg_expr(cg, n->unop.operand); // pointer in %rax
         if (elem == 8)
             fprintf(cg->out, "\tmovq\t(%%rax), %%rax\n");
+        else if (elem == 2)
+            fprintf(cg->out, "\tmovswl\t(%%rax), %%eax\n");
         else if (elem == 1)
             fprintf(cg->out, "\tmovsbl\t(%%rax), %%eax\n");
         else
@@ -624,6 +651,8 @@ static void cg_store_to_lvalue(codegen_t *cg, node_t *lhs)
             int size = lhs->member.resolved->size;
             if (size == 8)
                 fprintf(cg->out, "\tmovq\t%%rax, (%%rcx)\n");
+            else if (size == 2)
+                fprintf(cg->out, "\tmovw\t%%ax, (%%rcx)\n");
             else if (size == 1)
                 fprintf(cg->out, "\tmovb\t%%al, (%%rcx)\n");
             else
@@ -641,6 +670,8 @@ static void cg_store_to_lvalue(codegen_t *cg, node_t *lhs)
         fprintf(cg->out, "\tpopq\t%%rax\n");
         if (elem_size == 8)
             fprintf(cg->out, "\tmovq\t%%rax, (%%rcx)\n");
+        else if (elem_size == 2)
+            fprintf(cg->out, "\tmovw\t%%ax, (%%rcx)\n");
         else if (elem_size == 1)
             fprintf(cg->out, "\tmovb\t%%al, (%%rcx)\n");
         else
@@ -654,6 +685,8 @@ static void cg_store_to_lvalue(codegen_t *cg, node_t *lhs)
         fprintf(cg->out, "\tpopq\t%%rax\n");
         if (elem == 8)
             fprintf(cg->out, "\tmovq\t%%rax, (%%rcx)\n");
+        else if (elem == 2)
+            fprintf(cg->out, "\tmovw\t%%ax, (%%rcx)\n");
         else if (elem == 1)
             fprintf(cg->out, "\tmovb\t%%al, (%%rcx)\n");
         else
@@ -695,6 +728,8 @@ static void cg_member(codegen_t *cg, node_t *n)
     int size = n->member.resolved->size;
     if (size == 8)
         fprintf(cg->out, "\tmovq\t(%%rax), %%rax\n");
+    else if (size == 2)
+        fprintf(cg->out, "\tmovswl\t(%%rax), %%eax\n");
     else if (size == 1)
         fprintf(cg->out, "\tmovsbl\t(%%rax), %%eax\n");
     else
@@ -747,6 +782,8 @@ static void cg_subscript(codegen_t *cg, node_t *n)
     cg_subscript_addr(cg, n); // address → %rax
     if (elem_size == 8)
         fprintf(cg->out, "\tmovq\t(%%rax), %%rax\n");
+    else if (elem_size == 2)
+        fprintf(cg->out, "\tmovswl\t(%%rax), %%eax\n");
     else if (elem_size == 1)
         fprintf(cg->out, "\tmovsbl\t(%%rax), %%eax\n");
     else
@@ -928,6 +965,8 @@ static void cg_array_init_list(codegen_t *cg, sym_t *sym, node_t *n)
         int offset = base + i * elem_size;
         if (elem_size == 8)
             fprintf(cg->out, "\tmovq\t%%rax, %d(%%rbp)\n", offset);
+        else if (elem_size == 2)
+            fprintf(cg->out, "\tmovw\t%%ax, %d(%%rbp)\n", offset);
         else if (elem_size == 1)
             fprintf(cg->out, "\tmovb\t%%al, %d(%%rbp)\n", offset);
         else
@@ -1007,8 +1046,8 @@ static void cg_postop(codegen_t *cg, node_t *n)
 
     // Increment or decrement the variable in place
     int delta = (sym->pointer_level > 0) ? sym_elem_size(sym) : 1;
-    const char *add_op = (size == 8) ? "addq" : "addl";
-    const char *sub_op = (size == 8) ? "subq" : "subl";
+    const char *add_op = (size == 8) ? "addq" : (size == 2) ? "addw" : "addl";
+    const char *sub_op = (size == 8) ? "subq" : (size == 2) ? "subw" : "subl";
     const char *instr = (n->postop.op == TOKEN_INC_OP) ? add_op : sub_op;
     if (sym->is_global)
         fprintf(cg->out, "\t%s\t$%d, %.*s(%%rip)\n", instr, delta, sym->name_len, sym->name);
@@ -1391,6 +1430,8 @@ static void cg_func(codegen_t *cg, node_t *n)
             int size = sym_get_size(sym);
             if (size == 8)
                 fprintf(cg->out, "\tmovq\t%s, %d(%%rbp)\n", arg_regs64[i], sym->offset);
+            else if (size == 2)
+                fprintf(cg->out, "\tmovw\t%s, %d(%%rbp)\n", arg_regs16[i], sym->offset);
             else if (size == 1)
                 fprintf(cg->out, "\tmovb\t%s, %d(%%rbp)\n", arg_regs8[i], sym->offset);
             else
@@ -1465,6 +1506,8 @@ static void cg_global_decl(codegen_t *cg, node_t *n)
             long val = cg_node_int_val(elem);
             if (size == 8)
                 fprintf(cg->out, "\t.quad\t%ld\n", val);
+            else if (size == 2)
+                fprintf(cg->out, "\t.short\t%ld\n", val);
             else if (size == 1)
                 fprintf(cg->out, "\t.byte\t%ld\n", val);
             else
@@ -1478,6 +1521,8 @@ static void cg_global_decl(codegen_t *cg, node_t *n)
         long val = cg_node_int_val(init);
         if (size == 8)
             fprintf(cg->out, "\t.quad\t%ld\n", val);
+        else if (size == 2)
+            fprintf(cg->out, "\t.short\t%ld\n", val);
         else if (size == 1)
             fprintf(cg->out, "\t.byte\t%ld\n", val);
         else

@@ -562,6 +562,69 @@ static int guscc_test_fail_ellipsis_only(void)
     return 0;
 }
 
+/* Short and long type specifiers */
+static int guscc_test_short_basic(void) { return compile_and_run("../test/files/short_basic.c", 42); }
+
+static int guscc_test_short_int_syntax(void)
+{
+    return compile_and_run("../test/files/short_int_syntax.c", 42);
+}
+
+static int guscc_test_long_basic(void) { return compile_and_run("../test/files/long_basic.c", 42); }
+
+static int guscc_test_long_int_syntax(void)
+{
+    return compile_and_run("../test/files/long_int_syntax.c", 42);
+}
+
+static int guscc_test_long_long_syntax(void)
+{
+    return compile_and_run("../test/files/long_long_syntax.c", 42);
+}
+
+static int guscc_test_short_sizeof(void)
+{
+    return compile_and_run("../test/files/short_sizeof.c", 42);
+}
+
+static int guscc_test_short_array(void)
+{
+    return compile_and_run("../test/files/short_array.c", 42);
+}
+
+static int guscc_test_long_array(void) { return compile_and_run("../test/files/long_array.c", 42); }
+
+static int guscc_test_short_param(void)
+{
+    return compile_and_run("../test/files/short_param.c", 42);
+}
+
+static int guscc_test_long_param(void) { return compile_and_run("../test/files/long_param.c", 42); }
+
+static int guscc_test_short_cast(void) { return compile_and_run("../test/files/short_cast.c", 42); }
+
+static int guscc_test_short_global(void)
+{
+    return compile_and_run("../test/files/short_global.c", 42);
+}
+
+static int guscc_test_long_global(void)
+{
+    return compile_and_run("../test/files/long_global.c", 42);
+}
+
+static int guscc_test_short_struct_member(void)
+{
+    return compile_and_run("../test/files/short_struct_member.c", 42);
+}
+
+static int guscc_test_fail_short_short(void)
+{
+    int ret = compile_file("../test/files/fail_short_short.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -683,6 +746,22 @@ void guscc_test(void)
     ut_run(guscc_test_variadic_decl);
     ut_run(guscc_test_variadic_fwd_decl);
 
+    /* Short and long type specifiers */
+    ut_run(guscc_test_short_basic);
+    ut_run(guscc_test_short_int_syntax);
+    ut_run(guscc_test_long_basic);
+    ut_run(guscc_test_long_int_syntax);
+    ut_run(guscc_test_long_long_syntax);
+    ut_run(guscc_test_short_sizeof);
+    ut_run(guscc_test_short_array);
+    ut_run(guscc_test_long_array);
+    ut_run(guscc_test_short_param);
+    ut_run(guscc_test_long_param);
+    ut_run(guscc_test_short_cast);
+    ut_run(guscc_test_short_global);
+    ut_run(guscc_test_long_global);
+    ut_run(guscc_test_short_struct_member);
+
     /* Failure paths */
     ut_run(guscc_test_fail_switch_no_paren);
     ut_run(guscc_test_fail_enum_no_brace);
@@ -696,4 +775,5 @@ void guscc_test(void)
     ut_run(guscc_test_fail_deref_nonptr);
     ut_run(guscc_test_fail_global_nonconstant_init);
     ut_run(guscc_test_fail_ellipsis_only);
+    ut_run(guscc_test_fail_short_short);
 }

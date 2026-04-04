@@ -70,10 +70,12 @@ struct node {
         } translation_unit;    // used when kind == ND_TRANSLATION_UNIT
 
         enum {
-            ND_TYPE_VOID, // void
-            ND_TYPE_CHAR, // char
-            ND_TYPE_INT,  // int
-        } type_spec;      // used when kind == ND_TYPE_SPEC
+            ND_TYPE_VOID,  // void
+            ND_TYPE_CHAR,  // char
+            ND_TYPE_SHORT, // short (2 bytes)
+            ND_TYPE_INT,   // int
+            ND_TYPE_LONG,  // long (8 bytes)
+        } type_spec;       // used when kind == ND_TYPE_SPEC
 
         struct {
             node_str_t tag;    // struct tag name

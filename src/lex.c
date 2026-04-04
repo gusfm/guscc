@@ -72,6 +72,10 @@ static token_type_t get_token_type(char *s, int len)
         return TOKEN_KW_DEFAULT;
     if (len == 4 && strncmp(s, "enum", 4) == 0)
         return TOKEN_KW_ENUM;
+    if (len == 5 && strncmp(s, "short", 5) == 0)
+        return TOKEN_KW_SHORT;
+    if (len == 4 && strncmp(s, "long", 4) == 0)
+        return TOKEN_KW_LONG;
     return TOKEN_IDENT;
 }
 

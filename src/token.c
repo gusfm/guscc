@@ -60,6 +60,10 @@ void token_print(token_t *t)
         printf("DEFAULT ");
     } else if (type == TOKEN_KW_ENUM) {
         printf("ENUM ");
+    } else if (type == TOKEN_KW_SHORT) {
+        printf("SHORT ");
+    } else if (type == TOKEN_KW_LONG) {
+        printf("LONG ");
     } else if (type == TOKEN_INC_OP) {
         printf("++ ");
     } else if (type == TOKEN_DEC_OP) {
@@ -134,6 +138,10 @@ const char *token_type_to_str(token_type_t type, char *str, size_t len)
         snprintf(str, len, "default");
     } else if (type == TOKEN_KW_ENUM) {
         snprintf(str, len, "enum");
+    } else if (type == TOKEN_KW_SHORT) {
+        snprintf(str, len, "short");
+    } else if (type == TOKEN_KW_LONG) {
+        snprintf(str, len, "long");
     } else if (type == TOKEN_INC_OP) {
         snprintf(str, len, "'++'");
     } else if (type == TOKEN_DEC_OP) {

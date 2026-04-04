@@ -409,8 +409,30 @@ static node_t *parser_type_specifier(parser_t *p)
         node->type_spec = ND_TYPE_VOID;
     } else if (tok->type == TOKEN_KW_CHAR) {
         node->type_spec = ND_TYPE_CHAR;
+    } else if (tok->type == TOKEN_KW_SHORT) {
+        node->type_spec = ND_TYPE_SHORT;
+        // Consume optional trailing 'int': "short int"
+        token_t *next = parser_peek(p);
+        if (next && next->type == TOKEN_KW_INT) {
+            token_t *consumed = parser_next(p);
+            token_destroy(consumed);
+        }
     } else if (tok->type == TOKEN_KW_INT) {
         node->type_spec = ND_TYPE_INT;
+    } else if (tok->type == TOKEN_KW_LONG) {
+        node->type_spec = ND_TYPE_LONG;
+        // Consume optional second 'long': "long long"
+        token_t *next = parser_peek(p);
+        if (next && next->type == TOKEN_KW_LONG) {
+            token_t *consumed = parser_next(p);
+            token_destroy(consumed);
+            next = parser_peek(p);
+        }
+        // Consume optional trailing 'int': "long int" or "long long int"
+        if (next && next->type == TOKEN_KW_INT) {
+            token_t *consumed = parser_next(p);
+            token_destroy(consumed);
+        }
     } else {
         token_print_error(tok, "type");
         node_destroy(node);
@@ -632,6 +654,7 @@ static node_t *parser_declarator(parser_t *p)
 static bool parser_is_type_token(token_type_t type)
 {
     return type == TOKEN_KW_INT || type == TOKEN_KW_CHAR || type == TOKEN_KW_VOID ||
+           type == TOKEN_KW_SHORT || type == TOKEN_KW_LONG ||
            type == TOKEN_KW_STRUCT || type == TOKEN_KW_ENUM;
 }
 
@@ -651,8 +674,12 @@ static int parser_sym_size(node_t *decl_spec, int pointer_level)
     switch (decl_spec->decl_spec.type_spec->type_spec) {
         case ND_TYPE_CHAR:
             return 1;
+        case ND_TYPE_SHORT:
+            return 2;
         case ND_TYPE_INT:
             return 4;
+        case ND_TYPE_LONG:
+            return 8;
         case ND_TYPE_VOID:
             return 1;
     }
