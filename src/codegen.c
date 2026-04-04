@@ -35,6 +35,8 @@ static int sym_get_size(sym_t *sym)
         struct_def_t *def = sym->decl_spec->decl_spec.type_spec->struct_spec.def;
         return def ? def->size : 4;
     }
+    if (sym->decl_spec->decl_spec.type_spec->kind == ND_ENUM_SPEC)
+        return 4;
     switch (sym->decl_spec->decl_spec.type_spec->type_spec) {
         case ND_TYPE_CHAR:
             return 1;
@@ -62,6 +64,8 @@ static int sym_elem_size(sym_t *sym)
             struct_def_t *def = ts->struct_spec.def;
             return def ? def->size : 4;
         }
+        if (ts->kind == ND_ENUM_SPEC)
+            return 4;
         switch (ts->type_spec) {
             case ND_TYPE_CHAR: return 1;
             case ND_TYPE_INT:  return 4;
@@ -476,6 +480,8 @@ static void cg_sizeof_type(codegen_t *cg, node_t *n)
             struct_def_t *def = ds->decl_spec.type_spec->struct_spec.def;
             if (def)
                 size = def->size;
+        } else if (ds->decl_spec.type_spec && ds->decl_spec.type_spec->kind == ND_ENUM_SPEC) {
+            size = 4;
         } else if (ds->decl_spec.type_spec) {
             switch (ds->decl_spec.type_spec->type_spec) {
                 case ND_TYPE_CHAR:
@@ -783,6 +789,10 @@ static void cg_ident(codegen_t *cg, node_t *n)
                 n->ident.name.str);
         cg->errors++;
         fprintf(cg->out, "\txorl\t%%eax, %%eax\n");
+        return;
+    }
+    if (n->ident.sym->is_enum_const) {
+        fprintf(cg->out, "\tmovl\t$%d, %%eax\n", n->ident.sym->enum_val);
         return;
     }
     if (n->ident.sym->array_size > 0) {
@@ -1233,6 +1243,8 @@ static int cg_const_expr_val(node_t *expr)
         buf[len] = '\0';
         return atoi(buf);
     }
+    if (expr->kind == ND_IDENT && expr->ident.sym && expr->ident.sym->is_enum_const)
+        return expr->ident.sym->enum_val;
     if (expr->kind == ND_UNOP && expr->unop.op == '-') {
         return -cg_const_expr_val(expr->unop.operand);
     }
@@ -1550,6 +1562,7 @@ static void cg_node(codegen_t *cg, node_t *n)
             break;
         case ND_DECL_SPEC:
         case ND_TYPE_SPEC:
+        case ND_ENUM_SPEC:
         case ND_PARAM_DECL:
         case ND_PARAM_LIST:
         case ND_DIRECT_DECL:

@@ -23,6 +23,7 @@ typedef enum {
     TOKEN_KW_SWITCH,     // switch keyword
     TOKEN_KW_CASE,       // case keyword
     TOKEN_KW_DEFAULT,    // default keyword
+    TOKEN_KW_ENUM,       // enum keyword
     TOKEN_INC_OP,        // ++
     TOKEN_DEC_OP,        // --
     TOKEN_PTR_OP,        // ->

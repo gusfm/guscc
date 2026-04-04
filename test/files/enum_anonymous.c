@@ -1,0 +1,6 @@
+enum { X = 5, Y = 10, Z = 15 };
+
+int main()
+{
+    return Z;
+}

@@ -14,6 +14,7 @@ typedef enum {
     ND_DECL_SPEC,        // Declaration specifiers (e.g. int, char)
     ND_TYPE_SPEC,        // Type specifier leaf (void / char / int)
     ND_STRUCT_SPEC,      // Struct specifier (tag name + resolved definition)
+    ND_ENUM_SPEC,        // Enum specifier (tag name)
     ND_PARAM_DECL,       // Single parameter declaration
     ND_PARAM_LIST,       // Comma-separated parameter list
     ND_DIRECT_DECL,      // Declarator: identifier + optional ptr '*' + param list
@@ -80,7 +81,11 @@ struct node {
         } struct_spec;         // used when kind == ND_STRUCT_SPEC
 
         struct {
-            node_t *type_spec; // ND_TYPE_SPEC or ND_STRUCT_SPEC
+            node_str_t tag; // enum tag name (empty for anonymous enums)
+        } enum_spec;        // used when kind == ND_ENUM_SPEC
+
+        struct {
+            node_t *type_spec; // ND_TYPE_SPEC, ND_STRUCT_SPEC, or ND_ENUM_SPEC
             int pointer_level; // for abstract declarators (cast / sizeof)
         } decl_spec;           // used when kind == ND_DECL_SPEC
 

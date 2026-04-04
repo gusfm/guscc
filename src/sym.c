@@ -38,6 +38,8 @@ sym_t *scope_define(scope_t *scope, const char *name, int name_len, node_t *decl
     s->array_size = array_size;
     s->offset = offset;
     s->is_global = 0;
+    s->is_enum_const = 0;
+    s->enum_val = 0;
     s->next = scope->syms;
     scope->syms = s;
     return s;
@@ -87,6 +89,24 @@ void struct_def_destroy_list(struct_def_t *d)
     while (d != NULL) {
         struct_def_t *next = d->next;
         struct_member_destroy_list(d->members);
+        free(d);
+        d = next;
+    }
+}
+
+enum_def_t *enum_def_lookup(enum_def_t *list, const char *tag, int tag_len)
+{
+    for (enum_def_t *d = list; d != NULL; d = d->next) {
+        if (d->tag_len == tag_len && memcmp(d->tag, tag, (size_t)tag_len) == 0)
+            return d;
+    }
+    return NULL;
+}
+
+void enum_def_destroy_list(enum_def_t *d)
+{
+    while (d != NULL) {
+        enum_def_t *next = d->next;
         free(d);
         d = next;
     }

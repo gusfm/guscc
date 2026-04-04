@@ -34,6 +34,8 @@ void node_destroy(node_t *node)
             break;
         case ND_STRUCT_SPEC:
             break; // does not own the struct_def_t (registry does)
+        case ND_ENUM_SPEC:
+            break; // tag points into source buffer, nothing to free
         case ND_PARAM_DECL:
             node_destroy(node->param_decl.decl_spec);
             node_destroy(node->param_decl.declarator);
@@ -258,6 +260,10 @@ void ast_print(node_t *n, int indent)
             printf("StructSpec:%d:%d: struct %.*s (size=%d)\n", n->line, n->col,
                    n->struct_spec.tag.len, n->struct_spec.tag.str,
                    n->struct_spec.def ? n->struct_spec.def->size : -1);
+            break;
+        case ND_ENUM_SPEC:
+            printf("EnumSpec:%d:%d: enum %.*s\n", n->line, n->col, n->enum_spec.tag.len,
+                   n->enum_spec.tag.str);
             break;
         case ND_PARAM_DECL:
             printf("Parameter declaration:%d:%d:\n", n->line, n->col);

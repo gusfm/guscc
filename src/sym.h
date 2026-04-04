@@ -11,8 +11,10 @@ typedef struct sym {
     int pointer_level;
     int array_size;  /* 0 = not array, positive = element count */
     int offset;      /* negative offset from %rbp (base of array for arrays) */
-    int is_global;   /* 0 = local/param, 1 = global variable */
-    struct sym *next; /* next symbol in the same scope */
+    int is_global;     /* 0 = local/param, 1 = global variable */
+    int is_enum_const; /* 1 = enum constant (not a variable) */
+    int enum_val;      /* value of enum constant (only valid if is_enum_const) */
+    struct sym *next;  /* next symbol in the same scope */
 } sym_t;
 
 /* A single member of a struct definition */
@@ -35,6 +37,13 @@ typedef struct struct_def {
     int align;                /* alignment requirement of the struct */
     struct struct_def *next;  /* next definition in the registry */
 } struct_def_t;
+
+/* A completed enum definition (just a tag for forward references) */
+typedef struct enum_def {
+    const char *tag; /* enum tag name, points into source buffer */
+    int tag_len;
+    struct enum_def *next; /* next definition in the registry */
+} enum_def_t;
 
 /* A single lexical scope (function body, nested block, etc.) */
 typedef struct scope {
@@ -69,5 +78,11 @@ void struct_member_destroy_list(struct_member_t *m);
 
 /* Free a linked list of struct_def_t nodes (including their members). */
 void struct_def_destroy_list(struct_def_t *d);
+
+/* Look up an enum definition by tag name. Returns NULL if not found. */
+enum_def_t *enum_def_lookup(enum_def_t *list, const char *tag, int tag_len);
+
+/* Free a linked list of enum_def_t nodes. */
+void enum_def_destroy_list(enum_def_t *d);
 
 #endif /* SYM_H */

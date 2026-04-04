@@ -506,6 +506,38 @@ static int guscc_test_fail_switch_no_paren(void)
     return 0;
 }
 
+static int guscc_test_enum_basic(void)
+{
+    return compile_and_run("../test/files/enum_basic.c", 1);
+}
+
+static int guscc_test_enum_explicit_values(void)
+{
+    return compile_and_run("../test/files/enum_explicit_values.c", 20);
+}
+
+static int guscc_test_enum_variable(void)
+{
+    return compile_and_run("../test/files/enum_variable.c", 3);
+}
+
+static int guscc_test_enum_switch(void)
+{
+    return compile_and_run("../test/files/enum_switch.c", 3);
+}
+
+static int guscc_test_enum_anonymous(void)
+{
+    return compile_and_run("../test/files/enum_anonymous.c", 15);
+}
+
+static int guscc_test_fail_enum_no_brace(void)
+{
+    int ret = compile_file("../test/files/fail_enum_no_brace.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 static int guscc_test_fail_global_nonconstant_init(void)
 {
     int ret = compile_file("../test/files/fail_global_nonconstant_init.c");
@@ -616,6 +648,13 @@ void guscc_test(void)
     ut_run(guscc_test_global_var_struct);
     ut_run(guscc_test_global_var_char);
 
+    /* Enums */
+    ut_run(guscc_test_enum_basic);
+    ut_run(guscc_test_enum_explicit_values);
+    ut_run(guscc_test_enum_variable);
+    ut_run(guscc_test_enum_switch);
+    ut_run(guscc_test_enum_anonymous);
+
     /* switch/case/default */
     ut_run(guscc_test_switch_basic);
     ut_run(guscc_test_switch_default);
@@ -625,6 +664,7 @@ void guscc_test(void)
 
     /* Failure paths */
     ut_run(guscc_test_fail_switch_no_paren);
+    ut_run(guscc_test_fail_enum_no_brace);
     ut_run(guscc_test_fail_syntax_error);
     ut_run(guscc_test_fail_undeclared_var);
     ut_run(guscc_test_fail_break_outside_loop);

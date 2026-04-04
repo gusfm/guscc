@@ -37,6 +37,8 @@ void parser_init(parser_t *p, char *buf, size_t size)
     p->global_scope = scope_new(NULL);
     p->frame_offset = 0;
     p->struct_defs = NULL;
+    p->enum_defs = NULL;
+    p->enum_syms = NULL;
 }
 
 void parser_finish(parser_t *p)
@@ -61,6 +63,10 @@ void parser_finish(parser_t *p)
     }
     struct_def_destroy_list(p->struct_defs);
     p->struct_defs = NULL;
+    enum_def_destroy_list(p->enum_defs);
+    p->enum_defs = NULL;
+    sym_destroy_list(p->enum_syms);
+    p->enum_syms = NULL;
 }
 
 token_t *parser_peek(parser_t *p)
@@ -263,11 +269,139 @@ node_t *parser_struct_or_union_specifier(parser_t *p)
  *  | TYPE_NAME
  *  ;
  */
+/* Helper: evaluate a constant integer expression from a token stream.
+ * Handles integer literals and negated literals only (for enum initializers). */
+static int parser_const_int(parser_t *p)
+{
+    int sign = 1;
+    if (parser_peek(p)->type == '-') {
+        token_destroy(parser_next(p));
+        sign = -1;
+    }
+    token_t *tok = parser_next(p);
+    int val = 0;
+    for (int i = 0; i < tok->len; i++)
+        val = val * 10 + (tok->sval[i] - '0');
+    token_destroy(tok);
+    return sign * val;
+}
+
+/*
+ * enum_specifier
+ *  : ENUM '{' enumerator_list '}'
+ *  | ENUM IDENTIFIER '{' enumerator_list '}'
+ *  | ENUM IDENTIFIER
+ *  ;
+ * enumerator_list
+ *  : enumerator
+ *  | enumerator_list ',' enumerator
+ *  ;
+ * enumerator
+ *  : IDENTIFIER
+ *  | IDENTIFIER '=' constant_expression
+ *  ;
+ */
+/* Look up an enum constant by name in the parser's enum_syms list. */
+static sym_t *parser_enum_lookup(parser_t *p, const char *name, int name_len)
+{
+    for (sym_t *s = p->enum_syms; s != NULL; s = s->next) {
+        if (s->name_len == name_len && memcmp(s->name, name, (size_t)name_len) == 0)
+            return s;
+    }
+    return NULL;
+}
+
+node_t *parser_enum_specifier(parser_t *p)
+{
+    token_t *kw = parser_next(p); // consume 'enum'
+    int line = kw->line, col = kw->col;
+    token_destroy(kw);
+
+    // Optional tag name
+    char *tag = NULL;
+    int tag_len = 0;
+    if (parser_peek(p)->type == TOKEN_IDENT) {
+        token_t *id = parser_next(p);
+        tag = id->sval;
+        tag_len = id->len;
+        token_destroy(id);
+    }
+
+    if (parser_peek(p)->type != '{') {
+        // Forward reference: enum NAME (without body)
+        if (tag == NULL) {
+            fprintf(stderr, "%d:%d: error: expected enum tag or '{'\n", line, col);
+            return NULL;
+        }
+        enum_def_t *def = enum_def_lookup(p->enum_defs, tag, tag_len);
+        if (def == NULL) {
+            fprintf(stderr, "%d:%d: error: use of undefined enum '%.*s'\n", line, col, tag_len,
+                    tag);
+            return NULL;
+        }
+        node_t *n = node_create(ND_ENUM_SPEC, line, col);
+        n->enum_spec.tag.str = tag;
+        n->enum_spec.tag.len = tag_len;
+        return n;
+    }
+
+    // Consume '{'
+    token_destroy(parser_next(p));
+
+    // Parse enumerator list
+    int next_val = 0;
+    while (parser_peek(p)->type != '}') {
+        token_t *id = parser_next(p);
+        if (id->type != TOKEN_IDENT) {
+            token_print_error(id, "identifier");
+            token_destroy(id);
+            return NULL;
+        }
+        int val = next_val;
+        if (parser_peek(p)->type == '=') {
+            token_destroy(parser_next(p)); // consume '='
+            val = parser_const_int(p);
+        }
+
+        // Create enum constant sym and prepend to parser's enum_syms list
+        sym_t *sym = malloc(sizeof(sym_t));
+        memset(sym, 0, sizeof(sym_t));
+        sym->name = id->sval;
+        sym->name_len = id->len;
+        sym->is_enum_const = 1;
+        sym->enum_val = val;
+        sym->next = p->enum_syms;
+        p->enum_syms = sym;
+
+        next_val = val + 1;
+        token_destroy(id);
+        if (parser_peek(p)->type == ',')
+            token_destroy(parser_next(p));
+    }
+    token_destroy(parser_next(p)); // consume '}'
+
+    // Register named enum in the registry
+    if (tag) {
+        enum_def_t *def = malloc(sizeof(enum_def_t));
+        def->tag = tag;
+        def->tag_len = tag_len;
+        def->next = p->enum_defs;
+        p->enum_defs = def;
+    }
+
+    node_t *n = node_create(ND_ENUM_SPEC, line, col);
+    n->enum_spec.tag.str = tag;
+    n->enum_spec.tag.len = tag_len;
+    return n;
+}
+
 node_t *parser_type_specifier(parser_t *p)
 {
     token_t *peek = parser_peek(p);
     if (peek != NULL && peek->type == TOKEN_KW_STRUCT)
         return parser_struct_or_union_specifier(p);
+    if (peek != NULL && peek->type == TOKEN_KW_ENUM)
+        return parser_enum_specifier(p);
 
     token_t *tok = parser_next(p);
     node_t *node = node_create(ND_TYPE_SPEC, tok->line, tok->col);
@@ -491,7 +625,7 @@ node_t *parser_declarator(parser_t *p)
 static bool parser_is_type_token(token_type_t type)
 {
     return type == TOKEN_KW_INT || type == TOKEN_KW_CHAR || type == TOKEN_KW_VOID ||
-           type == TOKEN_KW_STRUCT;
+           type == TOKEN_KW_STRUCT || type == TOKEN_KW_ENUM;
 }
 
 /* Return the byte size of a type given its decl_spec and pointer level */
@@ -505,6 +639,8 @@ static int parser_sym_size(node_t *decl_spec, int pointer_level)
         struct_def_t *def = decl_spec->decl_spec.type_spec->struct_spec.def;
         return def ? def->size : 4;
     }
+    if (decl_spec->decl_spec.type_spec->kind == ND_ENUM_SPEC)
+        return 4;
     switch (decl_spec->decl_spec.type_spec->type_spec) {
         case ND_TYPE_CHAR:
             return 1;
@@ -684,6 +820,8 @@ node_t *parser_primary_expression(parser_t *p)
                 n->ident.sym = scope_lookup(p->func_scope, tok->sval, tok->len);
             if (n->ident.sym == NULL)
                 n->ident.sym = scope_lookup(p->global_scope, tok->sval, tok->len);
+            if (n->ident.sym == NULL)
+                n->ident.sym = parser_enum_lookup(p, tok->sval, tok->len);
             if (n->ident.sym == NULL)
                 fprintf(stderr, "%d:%d: warning: undeclared identifier '%.*s'\n", tok->line,
                         tok->col, tok->len, tok->sval);

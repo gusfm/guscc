@@ -70,6 +70,8 @@ static token_type_t get_token_type(char *s, int len)
         return TOKEN_KW_CASE;
     if (len == 7 && strncmp(s, "default", 7) == 0)
         return TOKEN_KW_DEFAULT;
+    if (len == 4 && strncmp(s, "enum", 4) == 0)
+        return TOKEN_KW_ENUM;
     return TOKEN_IDENT;
 }
 
