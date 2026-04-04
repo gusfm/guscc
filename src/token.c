@@ -52,6 +52,12 @@ void token_print(token_t *t)
         printf("SIZEOF ");
     } else if (type == TOKEN_KW_STRUCT) {
         printf("STRUCT ");
+    } else if (type == TOKEN_KW_SWITCH) {
+        printf("SWITCH ");
+    } else if (type == TOKEN_KW_CASE) {
+        printf("CASE ");
+    } else if (type == TOKEN_KW_DEFAULT) {
+        printf("DEFAULT ");
     } else if (type == TOKEN_INC_OP) {
         printf("++ ");
     } else if (type == TOKEN_DEC_OP) {
@@ -116,6 +122,12 @@ const char *token_type_to_str(token_type_t type, char *str, size_t len)
         snprintf(str, len, "sizeof");
     } else if (type == TOKEN_KW_STRUCT) {
         snprintf(str, len, "struct");
+    } else if (type == TOKEN_KW_SWITCH) {
+        snprintf(str, len, "switch");
+    } else if (type == TOKEN_KW_CASE) {
+        snprintf(str, len, "case");
+    } else if (type == TOKEN_KW_DEFAULT) {
+        snprintf(str, len, "default");
     } else if (type == TOKEN_INC_OP) {
         snprintf(str, len, "'++'");
     } else if (type == TOKEN_DEC_OP) {

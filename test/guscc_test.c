@@ -474,6 +474,38 @@ static int guscc_test_global_var_char(void)
     return compile_and_run("../test/files/global_var_char.c", 42);
 }
 
+static int guscc_test_switch_basic(void)
+{
+    return compile_and_run("../test/files/switch_basic.c", 20);
+}
+
+static int guscc_test_switch_default(void)
+{
+    return compile_and_run("../test/files/switch_default.c", 10);
+}
+
+static int guscc_test_switch_fallthrough(void)
+{
+    return compile_and_run("../test/files/switch_fallthrough.c", 3);
+}
+
+static int guscc_test_switch_break(void)
+{
+    return compile_and_run("../test/files/switch_break.c", 1);
+}
+
+static int guscc_test_switch_nested_loop(void)
+{
+    return compile_and_run("../test/files/switch_nested_loop.c", 3);
+}
+
+static int guscc_test_fail_switch_no_paren(void)
+{
+    int ret = compile_file("../test/files/fail_switch_no_paren.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 static int guscc_test_fail_global_nonconstant_init(void)
 {
     int ret = compile_file("../test/files/fail_global_nonconstant_init.c");
@@ -584,7 +616,15 @@ void guscc_test(void)
     ut_run(guscc_test_global_var_struct);
     ut_run(guscc_test_global_var_char);
 
+    /* switch/case/default */
+    ut_run(guscc_test_switch_basic);
+    ut_run(guscc_test_switch_default);
+    ut_run(guscc_test_switch_fallthrough);
+    ut_run(guscc_test_switch_break);
+    ut_run(guscc_test_switch_nested_loop);
+
     /* Failure paths */
+    ut_run(guscc_test_fail_switch_no_paren);
     ut_run(guscc_test_fail_syntax_error);
     ut_run(guscc_test_fail_undeclared_var);
     ut_run(guscc_test_fail_break_outside_loop);

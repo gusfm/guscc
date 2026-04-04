@@ -61,6 +61,7 @@ Parameters are assigned negative `%rbp` offsets in declaration order (first para
 - Only named struct definitions; no anonymous structs, no nested struct types, no struct assignment
 - Forward function calls (callee defined later) produce an "undeclared identifier" warning; forward declarations with unnamed parameters are supported
 - Parenthesized abstract declarators (function pointer syntax) are parsed but not code-generated
+- `switch`/`case`/`default` supported with fall-through semantics and `break`; case values must be integer literals (or negated integer literals); no computed gotos or range expressions
 - Global variable declarations supported: initialized and uninitialized scalars, arrays, char arrays from string literals, and pointer-to-string globals; all use `%rip`-relative addressing; no `static`/`extern` yet; struct globals must be uninitialized
 
 ## Testing

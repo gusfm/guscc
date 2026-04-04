@@ -19,6 +19,9 @@ typedef enum {
     ND_DIRECT_DECL,      // Declarator: identifier + optional ptr '*' + param list
     ND_COMP_STMT,        // Compound statement  { ... }
     ND_IF_STMT,          // if (cond) then [else else_]
+    ND_SWITCH_STMT,      // switch (expr) body
+    ND_CASE_LABEL,       // case expr : stmt
+    ND_DEFAULT_LABEL,    // default : stmt
     ND_WHILE_STMT,       // while (cond) body
     ND_DO_WHILE_STMT,    // do body while (cond) ;
     ND_FOR_STMT,         // for ( init ; cond ; post ) body
@@ -116,6 +119,20 @@ struct node {
             node_t *then;
             node_t *else_; // NULL if no else clause
         } if_stmt;         // used when kind == ND_IF_STMT
+
+        struct {
+            node_t *expr;
+            node_t *body;
+        } switch_stmt; // used when kind == ND_SWITCH_STMT
+
+        struct {
+            node_t *expr;
+            node_t *stmt;
+        } case_label; // used when kind == ND_CASE_LABEL
+
+        struct {
+            node_t *stmt;
+        } default_label; // used when kind == ND_DEFAULT_LABEL
 
         struct {
             node_t *cond;

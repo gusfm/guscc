@@ -1506,6 +1506,25 @@ node_t *parser_selection_statement(parser_t *p)
         n->if_stmt.then = then;
         n->if_stmt.else_ = else_;
         return n;
+    } else if (ttype == TOKEN_KW_SWITCH) {
+        if (!parser_expect(p, '('))
+            return NULL;
+        node_t *expr = parser_expression(p);
+        if (!expr)
+            return NULL;
+        if (!parser_expect(p, ')')) {
+            node_destroy(expr);
+            return NULL;
+        }
+        node_t *body = parser_statement(p);
+        if (!body) {
+            node_destroy(expr);
+            return NULL;
+        }
+        node_t *n = node_create(ND_SWITCH_STMT, line, col);
+        n->switch_stmt.expr = expr;
+        n->switch_stmt.body = body;
+        return n;
     }
     return NULL;
 }
@@ -1679,18 +1698,62 @@ node_t *parser_jump_statement(parser_t *p)
     return n;
 }
 
+/*
+ * labeled_statement
+ *  : CASE constant_expression ':' statement
+ *  | DEFAULT ':' statement
+ *  ;
+ */
+static node_t *parser_labeled_statement(parser_t *p)
+{
+    token_t *t = parser_next(p);
+    int line = t->line, col = t->col;
+    token_type_t ttype = t->type;
+    token_destroy(t);
+
+    if (ttype == TOKEN_KW_CASE) {
+        node_t *expr = parser_conditional_expression(p);
+        if (!expr)
+            return NULL;
+        if (!parser_expect(p, ':')) {
+            node_destroy(expr);
+            return NULL;
+        }
+        node_t *stmt = parser_statement(p);
+        if (!stmt) {
+            node_destroy(expr);
+            return NULL;
+        }
+        node_t *n = node_create(ND_CASE_LABEL, line, col);
+        n->case_label.expr = expr;
+        n->case_label.stmt = stmt;
+        return n;
+    } else { // TOKEN_KW_DEFAULT
+        if (!parser_expect(p, ':'))
+            return NULL;
+        node_t *stmt = parser_statement(p);
+        if (!stmt)
+            return NULL;
+        node_t *n = node_create(ND_DEFAULT_LABEL, line, col);
+        n->default_label.stmt = stmt;
+        return n;
+    }
+}
+
 node_t *parser_statement(parser_t *p)
 {
     token_t *t = parser_peek(p);
     if (t->type == '{') {
         return parser_compound_statement(p);
-    } else if (t->type == TOKEN_KW_IF) {
+    } else if (t->type == TOKEN_KW_IF || t->type == TOKEN_KW_SWITCH) {
         return parser_selection_statement(p);
     } else if (t->type == TOKEN_KW_WHILE || t->type == TOKEN_KW_DO || t->type == TOKEN_KW_FOR) {
         return parser_iteration_statement(p);
     } else if (t->type == TOKEN_KW_RETURN || t->type == TOKEN_KW_BREAK ||
                t->type == TOKEN_KW_CONTINUE) {
         return parser_jump_statement(p);
+    } else if (t->type == TOKEN_KW_CASE || t->type == TOKEN_KW_DEFAULT) {
+        return parser_labeled_statement(p);
     } else {
         return parser_expression_statement(p);
     }

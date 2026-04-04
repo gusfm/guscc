@@ -20,6 +20,9 @@ typedef enum {
     TOKEN_KW_WHILE,      // while keyword
     TOKEN_KW_SIZEOF,     // sizeof keyword
     TOKEN_KW_STRUCT,     // struct keyword
+    TOKEN_KW_SWITCH,     // switch keyword
+    TOKEN_KW_CASE,       // case keyword
+    TOKEN_KW_DEFAULT,    // default keyword
     TOKEN_INC_OP,        // ++
     TOKEN_DEC_OP,        // --
     TOKEN_PTR_OP,        // ->

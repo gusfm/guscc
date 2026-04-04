@@ -112,6 +112,11 @@ void codegen_init(codegen_t *cg, FILE *out)
     cg->errors = 0;
     cg->loop_label = -1;
     cg->loop_cont_kind = 0;
+    cg->break_label = -1;
+    cg->switch_cases = NULL;
+    cg->switch_case_labels = NULL;
+    cg->switch_ncases = 0;
+    cg->switch_default_lbl = -1;
     cg->str_count = 0;
 }
 
@@ -1082,12 +1087,12 @@ static void cg_expr_stmt(codegen_t *cg, node_t *n)
 
 static void cg_break_stmt(codegen_t *cg, node_t *n)
 {
-    if (cg->loop_label < 0) {
-        fprintf(stderr, "%d:%d: error: 'break' outside loop\n", n->line, n->col);
+    if (cg->break_label < 0) {
+        fprintf(stderr, "%d:%d: error: 'break' outside loop or switch\n", n->line, n->col);
         cg->errors++;
         return;
     }
-    fprintf(cg->out, "\tjmp\t.L%d_end\n", cg->loop_label);
+    fprintf(cg->out, "\tjmp\t.L%d_end\n", cg->break_label);
 }
 
 static void cg_continue_stmt(codegen_t *cg, node_t *n)
@@ -1110,8 +1115,10 @@ static void cg_while_stmt(codegen_t *cg, node_t *n)
     int lbl = cg->label_count++;
     int prev_loop = cg->loop_label;
     int prev_kind = cg->loop_cont_kind;
+    int prev_break = cg->break_label;
     cg->loop_label = lbl;
     cg->loop_cont_kind = 0;
+    cg->break_label = lbl;
     fprintf(cg->out, ".L%d_start:\n", lbl);
     cg_expr(cg, n->while_stmt.cond);
     fprintf(cg->out, "\ttestl\t%%eax, %%eax\n");
@@ -1121,6 +1128,7 @@ static void cg_while_stmt(codegen_t *cg, node_t *n)
     fprintf(cg->out, ".L%d_end:\n", lbl);
     cg->loop_label = prev_loop;
     cg->loop_cont_kind = prev_kind;
+    cg->break_label = prev_break;
 }
 
 static void cg_do_while_stmt(codegen_t *cg, node_t *n)
@@ -1128,8 +1136,10 @@ static void cg_do_while_stmt(codegen_t *cg, node_t *n)
     int lbl = cg->label_count++;
     int prev_loop = cg->loop_label;
     int prev_kind = cg->loop_cont_kind;
+    int prev_break = cg->break_label;
     cg->loop_label = lbl;
     cg->loop_cont_kind = 1;
+    cg->break_label = lbl;
     fprintf(cg->out, ".L%d_start:\n", lbl);
     cg_node(cg, n->while_stmt.body);
     fprintf(cg->out, ".L%d_cond:\n", lbl);
@@ -1139,6 +1149,7 @@ static void cg_do_while_stmt(codegen_t *cg, node_t *n)
     fprintf(cg->out, ".L%d_end:\n", lbl);
     cg->loop_label = prev_loop;
     cg->loop_cont_kind = prev_kind;
+    cg->break_label = prev_break;
 }
 
 static void cg_for_stmt(codegen_t *cg, node_t *n)
@@ -1146,8 +1157,10 @@ static void cg_for_stmt(codegen_t *cg, node_t *n)
     int lbl = cg->label_count++;
     int prev_loop = cg->loop_label;
     int prev_kind = cg->loop_cont_kind;
+    int prev_break = cg->break_label;
     cg->loop_label = lbl;
     cg->loop_cont_kind = 2;
+    cg->break_label = lbl;
 
     if (n->for_stmt.init)
         cg_node(cg, n->for_stmt.init);
@@ -1171,6 +1184,7 @@ static void cg_for_stmt(codegen_t *cg, node_t *n)
 
     cg->loop_label = prev_loop;
     cg->loop_cont_kind = prev_kind;
+    cg->break_label = prev_break;
 }
 
 static void cg_if_stmt(codegen_t *cg, node_t *n)
@@ -1189,6 +1203,122 @@ static void cg_if_stmt(codegen_t *cg, node_t *n)
         cg_node(cg, n->if_stmt.then);
     }
     fprintf(cg->out, ".L%d_end:\n", lbl);
+}
+
+/* Collect case/default labels from a switch body (compound statement).
+ * Each case/default may be nested inside the compound stmt's direct children. */
+static void cg_collect_cases(node_t *n, node_t **cases, int *ncases, node_t **default_node)
+{
+    if (n == NULL)
+        return;
+    if (n->kind == ND_CASE_LABEL) {
+        cases[(*ncases)++] = n;
+        cg_collect_cases(n->case_label.stmt, cases, ncases, default_node);
+    } else if (n->kind == ND_DEFAULT_LABEL) {
+        *default_node = n;
+        cg_collect_cases(n->default_label.stmt, cases, ncases, default_node);
+    } else if (n->kind == ND_COMP_STMT) {
+        for (int i = 0; i < n->comp_stmt.nstmts; i++)
+            cg_collect_cases(n->comp_stmt.stmts[i], cases, ncases, default_node);
+    }
+}
+
+/* Evaluate a constant expression (integer literal only for now) */
+static int cg_const_expr_val(node_t *expr)
+{
+    if (expr->kind == ND_NUM) {
+        char buf[32];
+        int len = expr->num.val.len < 31 ? expr->num.val.len : 31;
+        memcpy(buf, expr->num.val.str, len);
+        buf[len] = '\0';
+        return atoi(buf);
+    }
+    if (expr->kind == ND_UNOP && expr->unop.op == '-') {
+        return -cg_const_expr_val(expr->unop.operand);
+    }
+    return 0;
+}
+
+static void cg_switch_stmt(codegen_t *cg, node_t *n)
+{
+    int lbl = cg->label_count++;
+    int prev_break = cg->break_label;
+    cg->break_label = lbl;
+
+    // Evaluate switch expression
+    cg_expr(cg, n->switch_stmt.expr);
+    // Save in %eax; collect cases
+    node_t *cases[64];
+    int ncases = 0;
+    node_t *default_node = NULL;
+    cg_collect_cases(n->switch_stmt.body, cases, &ncases, &default_node);
+
+    // Assign a sub-label to each case
+    int case_labels[64];
+    for (int i = 0; i < ncases; i++)
+        case_labels[i] = cg->label_count++;
+    int default_lbl = default_node ? cg->label_count++ : -1;
+
+    // Emit jump table
+    for (int i = 0; i < ncases; i++) {
+        int val = cg_const_expr_val(cases[i]->case_label.expr);
+        fprintf(cg->out, "\tcmpl\t$%d, %%eax\n", val);
+        fprintf(cg->out, "\tje\t.L%d\n", case_labels[i]);
+    }
+    if (default_node)
+        fprintf(cg->out, "\tjmp\t.L%d\n", default_lbl);
+    else
+        fprintf(cg->out, "\tjmp\t.L%d_end\n", lbl);
+
+    // Store labels on the nodes so cg_case_label/cg_default_label can emit them
+    // We use a simple approach: store in a parallel array and pass via codegen context
+    // Actually, simpler: we store the label in a side channel. Since we process
+    // the body sequentially and cases appear in order, we can use a counter approach.
+    // But the cleanest way: just tag each case node with its label via a small lookup.
+    // For simplicity, we'll emit labels inline by walking cases in body order.
+
+    // We need to map case nodes to their labels. Use the case_labels array indexed by
+    // position in the cases[] array. We'll set a temporary field... but we don't have one.
+    // Instead, use a different approach: store a mapping in codegen_t temporarily.
+    // Simplest: store case_labels and cases arrays in codegen_t.
+    node_t **prev_switch_cases = cg->switch_cases;
+    int *prev_switch_case_labels = cg->switch_case_labels;
+    int prev_switch_ncases = cg->switch_ncases;
+    int prev_switch_default_lbl = cg->switch_default_lbl;
+
+    cg->switch_cases = cases;
+    cg->switch_case_labels = case_labels;
+    cg->switch_ncases = ncases;
+    cg->switch_default_lbl = default_lbl;
+
+    // Emit the body — case/default labels will look themselves up
+    cg_node(cg, n->switch_stmt.body);
+
+    fprintf(cg->out, ".L%d_end:\n", lbl);
+
+    cg->switch_cases = prev_switch_cases;
+    cg->switch_case_labels = prev_switch_case_labels;
+    cg->switch_ncases = prev_switch_ncases;
+    cg->switch_default_lbl = prev_switch_default_lbl;
+    cg->break_label = prev_break;
+}
+
+static void cg_case_label(codegen_t *cg, node_t *n)
+{
+    // Find this node in the current switch's case list
+    for (int i = 0; i < cg->switch_ncases; i++) {
+        if (cg->switch_cases[i] == n) {
+            fprintf(cg->out, ".L%d:\n", cg->switch_case_labels[i]);
+            break;
+        }
+    }
+    cg_node(cg, n->case_label.stmt);
+}
+
+static void cg_default_label(codegen_t *cg, node_t *n)
+{
+    fprintf(cg->out, ".L%d:\n", cg->switch_default_lbl);
+    cg_node(cg, n->default_label.stmt);
 }
 
 static void cg_comp_stmt(codegen_t *cg, node_t *n)
@@ -1381,6 +1511,15 @@ static void cg_node(codegen_t *cg, node_t *n)
             break;
         case ND_IF_STMT:
             cg_if_stmt(cg, n);
+            break;
+        case ND_SWITCH_STMT:
+            cg_switch_stmt(cg, n);
+            break;
+        case ND_CASE_LABEL:
+            cg_case_label(cg, n);
+            break;
+        case ND_DEFAULT_LABEL:
+            cg_default_label(cg, n);
             break;
         case ND_WHILE_STMT:
             cg_while_stmt(cg, n);

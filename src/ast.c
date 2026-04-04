@@ -54,6 +54,17 @@ void node_destroy(node_t *node)
             node_destroy(node->if_stmt.then);
             node_destroy(node->if_stmt.else_);
             break;
+        case ND_SWITCH_STMT:
+            node_destroy(node->switch_stmt.expr);
+            node_destroy(node->switch_stmt.body);
+            break;
+        case ND_CASE_LABEL:
+            node_destroy(node->case_label.expr);
+            node_destroy(node->case_label.stmt);
+            break;
+        case ND_DEFAULT_LABEL:
+            node_destroy(node->default_label.stmt);
+            break;
         case ND_WHILE_STMT:
         case ND_DO_WHILE_STMT:
             node_destroy(node->while_stmt.cond);
@@ -289,6 +300,20 @@ void ast_print(node_t *n, int indent)
             ast_print(n->if_stmt.then, indent + 1);
             if (n->if_stmt.else_)
                 ast_print(n->if_stmt.else_, indent + 1);
+            break;
+        case ND_SWITCH_STMT:
+            printf("SwitchStatement:%d:%d:\n", n->line, n->col);
+            ast_print(n->switch_stmt.expr, indent + 1);
+            ast_print(n->switch_stmt.body, indent + 1);
+            break;
+        case ND_CASE_LABEL:
+            printf("CaseLabel:%d:%d:\n", n->line, n->col);
+            ast_print(n->case_label.expr, indent + 1);
+            ast_print(n->case_label.stmt, indent + 1);
+            break;
+        case ND_DEFAULT_LABEL:
+            printf("DefaultLabel:%d:%d:\n", n->line, n->col);
+            ast_print(n->default_label.stmt, indent + 1);
             break;
         case ND_WHILE_STMT:
             printf("WhileStatement:%d:%d:\n", n->line, n->col);

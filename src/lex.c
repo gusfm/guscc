@@ -64,6 +64,12 @@ static token_type_t get_token_type(char *s, int len)
         return TOKEN_KW_FOR;
     if (len == 6 && strncmp(s, "struct", 6) == 0)
         return TOKEN_KW_STRUCT;
+    if (len == 6 && strncmp(s, "switch", 6) == 0)
+        return TOKEN_KW_SWITCH;
+    if (len == 4 && strncmp(s, "case", 4) == 0)
+        return TOKEN_KW_CASE;
+    if (len == 7 && strncmp(s, "default", 7) == 0)
+        return TOKEN_KW_DEFAULT;
     return TOKEN_IDENT;
 }
 
