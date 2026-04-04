@@ -16,15 +16,15 @@ typedef enum {
 } decl_mode_t;
 
 // Forward declarations
-node_t *parser_declarator(parser_t *p);
+static node_t *parser_declarator(parser_t *p);
 static node_t *parser_declarator_mode(parser_t *p, decl_mode_t mode);
-node_t *parser_compound_statement(parser_t *p);
-node_t *parser_statement(parser_t *p);
-node_t *parser_declaration_specifiers(parser_t *p);
-node_t *parser_expression(parser_t *p);
-node_t *parser_assignment_expression(parser_t *p);
-node_t *parser_cast_expression(parser_t *p);
-node_t *parser_unary_expression(parser_t *p);
+static node_t *parser_compound_statement(parser_t *p);
+static node_t *parser_statement(parser_t *p);
+static node_t *parser_declaration_specifiers(parser_t *p);
+static node_t *parser_expression(parser_t *p);
+static node_t *parser_assignment_expression(parser_t *p);
+static node_t *parser_cast_expression(parser_t *p);
+static node_t *parser_unary_expression(parser_t *p);
 static int parser_sym_size(node_t *decl_spec, int pointer_level);
 
 void parser_init(parser_t *p, char *buf, size_t size)
@@ -146,7 +146,7 @@ static int parser_align_up(int offset, int align)
  *  | UNION
  *  ;
  */
-node_t *parser_struct_or_union_specifier(parser_t *p)
+static node_t *parser_struct_or_union_specifier(parser_t *p)
 {
     token_t *kw = parser_expect_token(p, TOKEN_KW_STRUCT);
     if (kw == NULL)
@@ -311,7 +311,7 @@ static sym_t *parser_enum_lookup(parser_t *p, const char *name, int name_len)
     return NULL;
 }
 
-node_t *parser_enum_specifier(parser_t *p)
+static node_t *parser_enum_specifier(parser_t *p)
 {
     token_t *kw = parser_next(p); // consume 'enum'
     int line = kw->line, col = kw->col;
@@ -395,7 +395,7 @@ node_t *parser_enum_specifier(parser_t *p)
     return n;
 }
 
-node_t *parser_type_specifier(parser_t *p)
+static node_t *parser_type_specifier(parser_t *p)
 {
     token_t *peek = parser_peek(p);
     if (peek != NULL && peek->type == TOKEN_KW_STRUCT)
@@ -420,7 +420,7 @@ node_t *parser_type_specifier(parser_t *p)
     return node;
 }
 
-node_t *parser_declaration_specifiers(parser_t *p)
+static node_t *parser_declaration_specifiers(parser_t *p)
 {
     node_t *type_spec = parser_type_specifier(p);
     if (type_spec == NULL) {
@@ -431,7 +431,7 @@ node_t *parser_declaration_specifiers(parser_t *p)
     return node;
 }
 
-node_t *parser_parameter_declaration(parser_t *p)
+static node_t *parser_parameter_declaration(parser_t *p)
 {
     node_t *decl_spec = parser_declaration_specifiers(p);
     if (decl_spec == NULL)
@@ -455,7 +455,7 @@ node_t *parser_parameter_declaration(parser_t *p)
     return n;
 }
 
-node_t *parser_parameter_list(parser_t *p)
+static node_t *parser_parameter_list(parser_t *p)
 {
     node_t *param_decl = parser_parameter_declaration(p);
     if (param_decl == NULL)
@@ -624,7 +624,7 @@ static node_t *parser_declarator_mode(parser_t *p, decl_mode_t mode)
     return n;
 }
 
-node_t *parser_declarator(parser_t *p)
+static node_t *parser_declarator(parser_t *p)
 {
     return parser_declarator_mode(p, DECL_CONCRETE);
 }
@@ -735,8 +735,8 @@ static node_t *parser_local_declaration(parser_t *p)
     if (array_size > 0) {
         total_size = elem_size * array_size;
     } else if (array_size == -1) {
-        fprintf(stderr, "%d:%d: error: array size missing in declaration\n",
-                declarator->line, declarator->col);
+        fprintf(stderr, "%d:%d: error: array size missing in declaration\n", declarator->line,
+                declarator->col);
         node_destroy(decl_spec);
         node_destroy(declarator);
         return NULL;
@@ -810,7 +810,7 @@ static node_t *parser_type_name(parser_t *p)
  * | '(' expression ')'
  * ;
  */
-node_t *parser_primary_expression(parser_t *p)
+static node_t *parser_primary_expression(parser_t *p)
 {
     token_t *tok = parser_peek(p);
     if (tok == NULL)
@@ -906,7 +906,7 @@ static void parser_resolve_member(node_t *mem)
  * | postfix_expression DEC_OP
  * ;
  */
-node_t *parser_postfix_expression(parser_t *p)
+static node_t *parser_postfix_expression(parser_t *p)
 {
     node_t *node = parser_primary_expression(p);
     if (node == NULL)
@@ -1031,7 +1031,7 @@ node_t *parser_postfix_expression(parser_t *p)
  * | SIZEOF '(' type_name ')'
  * ;
  */
-node_t *parser_unary_expression(parser_t *p)
+static node_t *parser_unary_expression(parser_t *p)
 {
     token_t *peek = parser_peek(p);
     if (peek == NULL)
@@ -1105,7 +1105,7 @@ node_t *parser_unary_expression(parser_t *p)
  * | '(' type_name ')' cast_expression
  * ;
  */
-node_t *parser_cast_expression(parser_t *p)
+static node_t *parser_cast_expression(parser_t *p)
 {
     token_t *p1 = parser_peek(p);
     if (p1 != NULL && p1->type == '(') {
@@ -1143,7 +1143,7 @@ node_t *parser_cast_expression(parser_t *p)
  * | multiplicative_expression '%' cast_expression
  * ;
  */
-node_t *parser_multiplicative_expression(parser_t *p)
+static node_t *parser_multiplicative_expression(parser_t *p)
 {
     node_t *node = parser_cast_expression(p);
     if (node == NULL)
@@ -1178,7 +1178,7 @@ node_t *parser_multiplicative_expression(parser_t *p)
  * | additive_expression '-' multiplicative_expression
  * ;
  */
-node_t *parser_additive_expression(parser_t *p)
+static node_t *parser_additive_expression(parser_t *p)
 {
     node_t *node = parser_multiplicative_expression(p);
     if (node == NULL)
@@ -1213,7 +1213,7 @@ node_t *parser_additive_expression(parser_t *p)
  * | shift_expression RIGHT_OP additive_expression
  * ;
  */
-node_t *parser_shift_expression(parser_t *p)
+static node_t *parser_shift_expression(parser_t *p)
 {
     node_t *node = parser_additive_expression(p);
     if (node == NULL)
@@ -1250,7 +1250,7 @@ node_t *parser_shift_expression(parser_t *p)
  * | relational_expression GE_OP shift_expression
  * ;
  */
-node_t *parser_relational_expression(parser_t *p)
+static node_t *parser_relational_expression(parser_t *p)
 {
     node_t *node = parser_shift_expression(p);
     if (node == NULL)
@@ -1286,7 +1286,7 @@ node_t *parser_relational_expression(parser_t *p)
  * | equality_expression NE_OP relational_expression
  * ;
  */
-node_t *parser_equality_expression(parser_t *p)
+static node_t *parser_equality_expression(parser_t *p)
 {
     node_t *node = parser_relational_expression(p);
     if (node == NULL)
@@ -1320,7 +1320,7 @@ node_t *parser_equality_expression(parser_t *p)
  * | and_expression '&' equality_expression
  * ;
  */
-node_t *parser_and_expression(parser_t *p)
+static node_t *parser_and_expression(parser_t *p)
 {
     node_t *node = parser_equality_expression(p);
     if (node == NULL)
@@ -1352,7 +1352,7 @@ node_t *parser_and_expression(parser_t *p)
  * | exclusive_or_expression '^' and_expression
  * ;
  */
-node_t *parser_exclusive_or_expression(parser_t *p)
+static node_t *parser_exclusive_or_expression(parser_t *p)
 {
     node_t *node = parser_and_expression(p);
     if (node == NULL)
@@ -1384,7 +1384,7 @@ node_t *parser_exclusive_or_expression(parser_t *p)
  * | inclusive_or_expression '|' exclusive_or_expression
  * ;
  */
-node_t *parser_inclusive_or_expression(parser_t *p)
+static node_t *parser_inclusive_or_expression(parser_t *p)
 {
     node_t *node = parser_exclusive_or_expression(p);
     if (node == NULL)
@@ -1416,7 +1416,7 @@ node_t *parser_inclusive_or_expression(parser_t *p)
  * | logical_and_expression AND_OP inclusive_or_expression
  * ;
  */
-node_t *parser_logical_and_expression(parser_t *p)
+static node_t *parser_logical_and_expression(parser_t *p)
 {
     node_t *node = parser_inclusive_or_expression(p);
     if (node == NULL)
@@ -1448,7 +1448,7 @@ node_t *parser_logical_and_expression(parser_t *p)
  * | logical_or_expression OR_OP logical_and_expression
  * ;
  */
-node_t *parser_logical_or_expression(parser_t *p)
+static node_t *parser_logical_or_expression(parser_t *p)
 {
     node_t *node = parser_logical_and_expression(p);
     if (node == NULL)
@@ -1480,7 +1480,7 @@ node_t *parser_logical_or_expression(parser_t *p)
  * | logical_or_expression '?' expression ':' conditional_expression
  * ;
  */
-node_t *parser_conditional_expression(parser_t *p)
+static node_t *parser_conditional_expression(parser_t *p)
 {
     node_t *cond = parser_logical_or_expression(p);
     if (cond == NULL)
@@ -1529,7 +1529,7 @@ static bool parser_is_assign_op(token_type_t type)
  * | unary_expression assignment_operator assignment_expression
  * ;
  */
-node_t *parser_assignment_expression(parser_t *p)
+static node_t *parser_assignment_expression(parser_t *p)
 {
     node_t *lhs = parser_conditional_expression(p);
     if (lhs == NULL)
@@ -1558,7 +1558,7 @@ node_t *parser_assignment_expression(parser_t *p)
  * | expression ',' assignment_expression
  * ;
  */
-node_t *parser_expression(parser_t *p)
+static node_t *parser_expression(parser_t *p)
 {
     node_t *node = parser_assignment_expression(p);
     if (node == NULL)
@@ -1583,7 +1583,7 @@ node_t *parser_expression(parser_t *p)
     return node;
 }
 
-node_t *parser_expression_statement(parser_t *p)
+static node_t *parser_expression_statement(parser_t *p)
 {
     token_t *peek = parser_peek(p);
     node_t *n = node_create(ND_EXPR_STMT, peek->line, peek->col);
@@ -1612,7 +1612,7 @@ node_t *parser_expression_statement(parser_t *p)
  *  | SWITCH '(' expression ')' statement
  *  ;
  */
-node_t *parser_selection_statement(parser_t *p)
+static node_t *parser_selection_statement(parser_t *p)
 {
     token_t *t = parser_next(p);
     int line = t->line, col = t->col;
@@ -1682,7 +1682,7 @@ node_t *parser_selection_statement(parser_t *p)
  *  | FOR '(' expression_statement expression_statement expression ')' statement
  *  ;
  */
-node_t *parser_iteration_statement(parser_t *p)
+static node_t *parser_iteration_statement(parser_t *p)
 {
     token_t *t = parser_peek(p);
     if (t->type == TOKEN_KW_WHILE) {
@@ -1798,7 +1798,7 @@ node_t *parser_iteration_statement(parser_t *p)
     return NULL;
 }
 
-node_t *parser_jump_statement(parser_t *p)
+static node_t *parser_jump_statement(parser_t *p)
 {
     token_t *t = parser_peek(p);
     if (t->type == TOKEN_KW_BREAK) {
@@ -1885,7 +1885,7 @@ static node_t *parser_labeled_statement(parser_t *p)
     }
 }
 
-node_t *parser_statement(parser_t *p)
+static node_t *parser_statement(parser_t *p)
 {
     token_t *t = parser_peek(p);
     if (t->type == '{') {
@@ -1919,7 +1919,7 @@ static bool parser_block_item_list(parser_t *p, node_t *comp)
     return true;
 }
 
-node_t *parser_compound_statement(parser_t *p)
+static node_t *parser_compound_statement(parser_t *p)
 {
     token_t *lbrace = parser_expect_token(p, '{');
     if (lbrace == NULL)
@@ -2084,7 +2084,7 @@ static node_t *parser_declaration_body(parser_t *p, node_t *decl_spec, node_t *d
  * '{' means a function body is next (function_definition); anything else is a
  * declaration.
  */
-node_t *parser_external_declaration(parser_t *p)
+static node_t *parser_external_declaration(parser_t *p)
 {
     node_t *decl_spec = parser_declaration_specifiers(p);
     if (decl_spec == NULL)
@@ -2118,7 +2118,7 @@ node_t *parser_external_declaration(parser_t *p)
  *  | translation_unit external_declaration
  *  ;
  */
-node_t *parser_translation_unit(parser_t *p)
+static node_t *parser_translation_unit(parser_t *p)
 {
     node_t *tu = node_create(ND_TRANSLATION_UNIT, 0, 0);
     while (parser_peek(p) != NULL) {

@@ -19,7 +19,7 @@
 #include "lex.h"
 #include "parser.h"
 
-char *load_file_to_string(const char *filename, long *size)
+static char *load_file_to_string(const char *filename, long *size)
 {
     FILE *f = fopen(filename, "rb");
     char *buffer;
@@ -57,7 +57,7 @@ char *load_file_to_string(const char *filename, long *size)
     return buffer;
 }
 
-int lexer(char *buf, int size)
+static int lexer(char *buf, int size)
 {
     lex_t lex;
     token_t *t;
@@ -73,7 +73,7 @@ int lexer(char *buf, int size)
     return 0;
 }
 
-int codegen(node_t *ast, const char *outpath)
+static int codegen(node_t *ast, const char *outpath)
 {
     FILE *out = fopen(outpath, "w");
     if (!out) {
@@ -88,7 +88,7 @@ int codegen(node_t *ast, const char *outpath)
     return ret;
 }
 
-void debug_file(char *buf)
+static void debug_file(char *buf)
 {
     char *endline, *ptr = buf;
     int line = 1;
