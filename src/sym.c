@@ -40,6 +40,7 @@ sym_t *scope_define(scope_t *scope, const char *name, int name_len, node_t *decl
     s->offset = offset;
     s->is_global = 0;
     s->is_static = 0;
+    s->is_extern = 0;
     s->asm_label = NULL;
     s->asm_label_len = 0;
     s->is_enum_const = 0;

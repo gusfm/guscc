@@ -13,6 +13,7 @@ typedef struct sym {
     int offset;      /* negative offset from %rbp (base of array for arrays) */
     int is_global;     /* 0 = local/param, 1 = global variable */
     int is_static;     /* 1 = declared with static keyword */
+    int is_extern;     /* 1 = declared with extern keyword (no storage allocated) */
     char *asm_label;   /* non-NULL for static locals: unique assembly label (heap-allocated) */
     int asm_label_len;
     int is_enum_const; /* 1 = enum constant (not a variable) */

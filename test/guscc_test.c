@@ -660,6 +660,36 @@ static int guscc_test_fail_static_nonconstant_init(void)
     return 0;
 }
 
+/* Extern storage class */
+static int guscc_test_extern_func_decl(void)
+{
+    return compile_and_run("../test/files/extern_func_decl.c", 42);
+}
+
+static int guscc_test_extern_func_def(void)
+{
+    return compile_and_run("../test/files/extern_func_def.c", 42);
+}
+
+static int guscc_test_extern_local_var(void)
+{
+    return compile_and_run("../test/files/extern_local_var.c", 42);
+}
+
+static int guscc_test_fail_extern_global_init(void)
+{
+    int ret = compile_file("../test/files/fail_extern_global_init.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
+static int guscc_test_fail_extern_local_init(void)
+{
+    int ret = compile_file("../test/files/fail_extern_local_init.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -820,4 +850,11 @@ void guscc_test(void)
     ut_run(guscc_test_static_local_uninit);
     ut_run(guscc_test_static_local_two_funcs);
     ut_run(guscc_test_static_local_array);
+
+    /* Extern storage class */
+    ut_run(guscc_test_extern_func_decl);
+    ut_run(guscc_test_extern_func_def);
+    ut_run(guscc_test_extern_local_var);
+    ut_run(guscc_test_fail_extern_global_init);
+    ut_run(guscc_test_fail_extern_local_init);
 }

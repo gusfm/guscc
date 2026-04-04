@@ -450,6 +450,9 @@ static node_t *parser_declaration_specifiers(parser_t *p)
     if (peek && peek->type == TOKEN_KW_STATIC) {
         storage_class = SC_STATIC;
         token_destroy(parser_next(p));
+    } else if (peek && peek->type == TOKEN_KW_EXTERN) {
+        storage_class = SC_EXTERN;
+        token_destroy(parser_next(p));
     }
     node_t *type_spec = parser_type_specifier(p);
     if (type_spec == NULL)
@@ -786,8 +789,16 @@ static node_t *parser_local_declaration(parser_t *p)
     }
 
     int is_static_local = (decl_spec->decl_spec.storage_class == SC_STATIC);
+    int is_extern_local = (decl_spec->decl_spec.storage_class == SC_EXTERN);
     sym_t *sym;
-    if (is_static_local) {
+    if (is_extern_local) {
+        // Extern locals: no stack allocation; accessed via %rip-relative using the symbol name
+        sym = scope_define(p->scope, declarator->direct_decl.ident.str,
+                           declarator->direct_decl.ident.len, decl_spec, pointer_level, array_size,
+                           0);
+        sym->is_global = 1;
+        sym->is_extern = 1;
+    } else if (is_static_local) {
         // Static locals: no stack allocation; use unique asm label, accessed via %rip-relative
         sym = scope_define(p->scope, declarator->direct_decl.ident.str,
                            declarator->direct_decl.ident.len, decl_spec, pointer_level, array_size,
@@ -816,6 +827,17 @@ static node_t *parser_local_declaration(parser_t *p)
             free(sym);
             node_destroy(decl_spec);
             node_destroy(declarator);
+            return NULL;
+        }
+        // Extern locals cannot have initializers
+        if (is_extern_local) {
+            fprintf(stderr, "%d:%d: error: 'extern' variable cannot have an initializer\n",
+                    init->line, init->col);
+            p->scope->syms = sym->next;
+            free(sym);
+            node_destroy(decl_spec);
+            node_destroy(declarator);
+            node_destroy(init);
             return NULL;
         }
         // Static locals require constant initializers
@@ -1985,7 +2007,8 @@ static bool parser_block_item_list(parser_t *p, node_t *comp)
     while (parser_peek(p)->type != '}') {
         node_t *item;
         if (parser_is_type_token(parser_peek(p)->type) ||
-            parser_peek(p)->type == TOKEN_KW_STATIC)
+            parser_peek(p)->type == TOKEN_KW_STATIC ||
+            parser_peek(p)->type == TOKEN_KW_EXTERN)
             item = parser_local_declaration(p);
         else
             item = parser_statement(p);
@@ -2125,6 +2148,15 @@ static node_t *parser_declaration_body(parser_t *p, node_t *decl_spec, node_t *d
             return NULL;
         }
     }
+    // Extern variables cannot have initializers
+    if (decl_spec->decl_spec.storage_class == SC_EXTERN && init != NULL) {
+        fprintf(stderr, "%d:%d: error: 'extern' variable cannot have an initializer\n", init->line,
+                init->col);
+        node_destroy(decl_spec);
+        node_destroy(declarator);
+        node_destroy(init);
+        return NULL;
+    }
     if (!parser_expect(p, ';')) {
         node_destroy(decl_spec);
         node_destroy(declarator);
@@ -2145,6 +2177,8 @@ static node_t *parser_declaration_body(parser_t *p, node_t *decl_spec, node_t *d
         sym->is_global = 1;
         if (decl_spec->decl_spec.storage_class == SC_STATIC)
             sym->is_static = 1;
+        else if (decl_spec->decl_spec.storage_class == SC_EXTERN)
+            sym->is_extern = 1;
         n->global_decl.sym = sym;
     } else {
         n->global_decl.sym = NULL;

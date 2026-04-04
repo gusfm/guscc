@@ -65,8 +65,9 @@ Parameters are assigned negative `%rbp` offsets in declaration order (first para
 - Parenthesized abstract declarators (function pointer syntax) are parsed but not code-generated
 - `short` (2 bytes) and `long` (8 bytes) type specifiers supported; combined forms accepted: `short int`, `long int`, `long long`, `long long int`; both `long` and `long long` are 8 bytes on x86-64; arithmetic on `short`/`long` values uses 32-bit operations (values >2³¹ will truncate), but load/store correctly use the proper width (16-bit `movw`/`movswl` for `short`, 64-bit `movq` for `long`)
 - `switch`/`case`/`default` supported with fall-through semantics and `break`; case values must be integer literals (or negated integer literals); no computed gotos or range expressions
-- `static` storage class specifier supported: file-scope `static` gives internal linkage (omits `.globl`); block-scope `static` gives static storage duration (allocated in `.data`/`.bss` with unique label, accessed via `%rip`-relative); static local initializers must be constant expressions; no `extern`/`auto`/`register` yet
-- Global variable declarations supported: initialized and uninitialized scalars, arrays, char arrays from string literals, and pointer-to-string globals; all use `%rip`-relative addressing; no `extern` yet; struct globals must be uninitialized
+- `static` storage class specifier supported: file-scope `static` gives internal linkage (omits `.globl`); block-scope `static` gives static storage duration (allocated in `.data`/`.bss` with unique label, accessed via `%rip`-relative); static local initializers must be constant expressions; no `auto`/`register` yet
+- `extern` storage class specifier supported: file-scope `extern` declares external linkage without allocating storage (linker resolves); block-scope `extern` declares a variable with external linkage visible in the block; `extern` on function declarations/definitions is accepted (no-op since functions default to external linkage); `extern` with initializer is rejected
+- Global variable declarations supported: initialized and uninitialized scalars, arrays, char arrays from string literals, and pointer-to-string globals; all use `%rip`-relative addressing; struct globals must be uninitialized
 
 ## Testing
 

@@ -986,6 +986,10 @@ static void cg_local_decl(codegen_t *cg, node_t *n)
     sym_t *sym = n->local_decl.sym;
     node_t *init = n->local_decl.init;
 
+    // Extern locals: no storage emitted
+    if (sym && sym->is_extern)
+        return;
+
     // Static locals: emit data section inline, no runtime init
     if (sym && sym->is_static) {
         int size = sym_get_size(sym);
@@ -1528,6 +1532,8 @@ static void cg_global_decl(codegen_t *cg, node_t *n)
     sym_t *sym = n->global_decl.sym;
     if (sym == NULL)
         return; // bare type decl (e.g. struct definition)
+    if (sym->is_extern)
+        return; // extern declaration — no storage emitted; linker resolves
 
     int size = sym_get_size(sym);
     int total = (sym->array_size > 0) ? sym->array_size * size : size;

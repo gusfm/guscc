@@ -6,6 +6,7 @@
 /* Storage class specifier constants */
 #define SC_NONE 0
 #define SC_STATIC 1
+#define SC_EXTERN 2
 
 /* Forward declarations — sym.h includes ast.h, so we forward-declare here */
 typedef struct sym sym_t;
