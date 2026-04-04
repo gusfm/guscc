@@ -25,6 +25,13 @@ static const char *arg_regs32[6] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9
 static const char *arg_regs16[6] = {"%di", "%si", "%dx", "%cx", "%r8w", "%r9w"};
 static const char *arg_regs8[6] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b"};
 
+// Return the assembly-visible name for a symbol (asm_label for static locals, name otherwise)
+static const char *sym_asm_name(sym_t *sym) { return sym->asm_label ? sym->asm_label : sym->name; }
+static int sym_asm_name_len(sym_t *sym)
+{
+    return sym->asm_label ? sym->asm_label_len : sym->name_len;
+}
+
 // Return the byte size of a sym (1 / 4 / 8 or struct size)
 static int sym_get_size(sym_t *sym)
 {
@@ -371,8 +378,8 @@ static void cg_unop(codegen_t *cg, node_t *n)
         node_t *operand = n->unop.operand;
         if (operand->kind == ND_IDENT && operand->ident.sym) {
             if (operand->ident.sym->is_global)
-                fprintf(cg->out, "\tleaq\t%.*s(%%rip), %%rax\n", operand->ident.sym->name_len,
-                        operand->ident.sym->name);
+                fprintf(cg->out, "\tleaq\t%.*s(%%rip), %%rax\n",
+                        sym_asm_name_len(operand->ident.sym), sym_asm_name(operand->ident.sym));
             else
                 fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", operand->ident.sym->offset);
         } else if (operand->kind == ND_MEMBER) {
@@ -426,7 +433,7 @@ static void cg_unop(codegen_t *cg, node_t *n)
         const char *sub_op = (size == 8) ? "subq" : (size == 2) ? "subw" : "subl";
         const char *instr = (op == TOKEN_INC_OP) ? add_op : sub_op;
         if (sym->is_global)
-            fprintf(cg->out, "\t%s\t$%d, %.*s(%%rip)\n", instr, delta, sym->name_len, sym->name);
+            fprintf(cg->out, "\t%s\t$%d, %.*s(%%rip)\n", instr, delta, sym_asm_name_len(sym), sym_asm_name(sym));
         else
             fprintf(cg->out, "\t%s\t$%d, %d(%%rbp)\n", instr, delta, sym->offset);
         cg_load_sym(cg, sym); // return updated value
@@ -528,13 +535,13 @@ static void cg_load_sym(codegen_t *cg, sym_t *sym)
     int size = sym_get_size(sym);
     if (sym->is_global) {
         if (size == 8)
-            fprintf(cg->out, "\tmovq\t%.*s(%%rip), %%rax\n", sym->name_len, sym->name);
+            fprintf(cg->out, "\tmovq\t%.*s(%%rip), %%rax\n", sym_asm_name_len(sym), sym_asm_name(sym));
         else if (size == 2)
-            fprintf(cg->out, "\tmovswl\t%.*s(%%rip), %%eax\n", sym->name_len, sym->name);
+            fprintf(cg->out, "\tmovswl\t%.*s(%%rip), %%eax\n", sym_asm_name_len(sym), sym_asm_name(sym));
         else if (size == 1)
-            fprintf(cg->out, "\tmovsbl\t%.*s(%%rip), %%eax\n", sym->name_len, sym->name);
+            fprintf(cg->out, "\tmovsbl\t%.*s(%%rip), %%eax\n", sym_asm_name_len(sym), sym_asm_name(sym));
         else
-            fprintf(cg->out, "\tmovl\t%.*s(%%rip), %%eax\n", sym->name_len, sym->name);
+            fprintf(cg->out, "\tmovl\t%.*s(%%rip), %%eax\n", sym_asm_name_len(sym), sym_asm_name(sym));
         return;
     }
     if (size == 8)
@@ -553,13 +560,13 @@ static void cg_store_sym(codegen_t *cg, sym_t *sym)
     int size = sym_get_size(sym);
     if (sym->is_global) {
         if (size == 8)
-            fprintf(cg->out, "\tmovq\t%%rax, %.*s(%%rip)\n", sym->name_len, sym->name);
+            fprintf(cg->out, "\tmovq\t%%rax, %.*s(%%rip)\n", sym_asm_name_len(sym), sym_asm_name(sym));
         else if (size == 2)
-            fprintf(cg->out, "\tmovw\t%%ax, %.*s(%%rip)\n", sym->name_len, sym->name);
+            fprintf(cg->out, "\tmovw\t%%ax, %.*s(%%rip)\n", sym_asm_name_len(sym), sym_asm_name(sym));
         else if (size == 1)
-            fprintf(cg->out, "\tmovb\t%%al, %.*s(%%rip)\n", sym->name_len, sym->name);
+            fprintf(cg->out, "\tmovb\t%%al, %.*s(%%rip)\n", sym_asm_name_len(sym), sym_asm_name(sym));
         else
-            fprintf(cg->out, "\tmovl\t%%eax, %.*s(%%rip)\n", sym->name_len, sym->name);
+            fprintf(cg->out, "\tmovl\t%%eax, %.*s(%%rip)\n", sym_asm_name_len(sym), sym_asm_name(sym));
         return;
     }
     if (size == 8)
@@ -583,8 +590,8 @@ static void cg_lvalue_addr(codegen_t *cg, node_t *n)
             return;
         }
         if (n->ident.sym->is_global)
-            fprintf(cg->out, "\tleaq\t%.*s(%%rip), %%rax\n", n->ident.sym->name_len,
-                    n->ident.sym->name);
+            fprintf(cg->out, "\tleaq\t%.*s(%%rip), %%rax\n", sym_asm_name_len(n->ident.sym),
+                    sym_asm_name(n->ident.sym));
         else
             fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", n->ident.sym->offset);
     } else if (n->kind == ND_UNOP && n->unop.op == '*') {
@@ -757,8 +764,8 @@ static void cg_subscript_addr(codegen_t *cg, node_t *n)
     if (arr->kind == ND_IDENT && arr->ident.sym && arr->ident.sym->array_size > 0) {
         // Array: base is stack slot (local) or global label
         if (arr->ident.sym->is_global)
-            fprintf(cg->out, "\tleaq\t%.*s(%%rip), %%rax\n", arr->ident.sym->name_len,
-                    arr->ident.sym->name);
+            fprintf(cg->out, "\tleaq\t%.*s(%%rip), %%rax\n",
+                    sym_asm_name_len(arr->ident.sym), sym_asm_name(arr->ident.sym));
         else
             fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", arr->ident.sym->offset);
     } else {
@@ -835,8 +842,8 @@ static void cg_ident(codegen_t *cg, node_t *n)
     if (n->ident.sym->array_size > 0) {
         // Array decays to pointer: yield base address of first element
         if (n->ident.sym->is_global)
-            fprintf(cg->out, "\tleaq\t%.*s(%%rip), %%rax\n", n->ident.sym->name_len,
-                    n->ident.sym->name);
+            fprintf(cg->out, "\tleaq\t%.*s(%%rip), %%rax\n", sym_asm_name_len(n->ident.sym),
+                    sym_asm_name(n->ident.sym));
         else
             fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", n->ident.sym->offset);
     } else {
@@ -979,6 +986,73 @@ static void cg_local_decl(codegen_t *cg, node_t *n)
     sym_t *sym = n->local_decl.sym;
     node_t *init = n->local_decl.init;
 
+    // Static locals: emit data section inline, no runtime init
+    if (sym && sym->is_static) {
+        int size = sym_get_size(sym);
+        int total = (sym->array_size > 0) ? sym->array_size * size : size;
+        int align = size < 8 ? size : 8;
+
+        if (init == NULL) {
+            // Uninitialized static local — zero-initialized via .local + .comm
+            fprintf(cg->out, "\t.local\t%.*s\n", sym_asm_name_len(sym), sym_asm_name(sym));
+            fprintf(cg->out, "\t.comm\t%.*s, %d, %d\n", sym_asm_name_len(sym), sym_asm_name(sym),
+                    total, align);
+        } else {
+            // Initialized static local — emit in .data section
+            fprintf(cg->out, "\t.data\n");
+            fprintf(cg->out, "\t.align\t%d\n", align);
+            fprintf(cg->out, "%.*s:\n", sym_asm_name_len(sym), sym_asm_name(sym));
+
+            if (sym->array_size > 0 && init->kind == ND_STR) {
+                const char *src = init->str.val.str;
+                int slen = init->str.val.len;
+                fprintf(cg->out, "\t.string\t%.*s\n", slen, src);
+                int used = slen - 1;
+                if (total > used)
+                    fprintf(cg->out, "\t.zero\t%d\n", total - used);
+            } else if (sym->array_size > 0 && init->kind == ND_INITIALIZER_LIST) {
+                int count = init->initializer_list.count;
+                if (count > sym->array_size)
+                    count = sym->array_size;
+                for (int i = 0; i < count; i++) {
+                    node_t *elem = init->initializer_list.items[i];
+                    if (elem->kind != ND_NUM) {
+                        fprintf(stderr,
+                                "%d:%d: error: static array initializer must be a constant\n",
+                                elem->line, elem->col);
+                        cg->errors++;
+                        continue;
+                    }
+                    long val = cg_node_int_val(elem);
+                    if (size == 8)
+                        fprintf(cg->out, "\t.quad\t%ld\n", val);
+                    else if (size == 2)
+                        fprintf(cg->out, "\t.short\t%ld\n", val);
+                    else if (size == 1)
+                        fprintf(cg->out, "\t.byte\t%ld\n", val);
+                    else
+                        fprintf(cg->out, "\t.long\t%ld\n", val);
+                }
+                int remaining = (sym->array_size - count) * size;
+                if (remaining > 0)
+                    fprintf(cg->out, "\t.zero\t%d\n", remaining);
+            } else if (init->kind == ND_NUM) {
+                long val = cg_node_int_val(init);
+                if (size == 8)
+                    fprintf(cg->out, "\t.quad\t%ld\n", val);
+                else if (size == 2)
+                    fprintf(cg->out, "\t.short\t%ld\n", val);
+                else if (size == 1)
+                    fprintf(cg->out, "\t.byte\t%ld\n", val);
+                else
+                    fprintf(cg->out, "\t.long\t%ld\n", val);
+            }
+
+            fprintf(cg->out, "\t.text\n");
+        }
+        return;
+    }
+
     if (init == NULL)
         return; // uninitialized — nothing to emit
 
@@ -1050,7 +1124,7 @@ static void cg_postop(codegen_t *cg, node_t *n)
     const char *sub_op = (size == 8) ? "subq" : (size == 2) ? "subw" : "subl";
     const char *instr = (n->postop.op == TOKEN_INC_OP) ? add_op : sub_op;
     if (sym->is_global)
-        fprintf(cg->out, "\t%s\t$%d, %.*s(%%rip)\n", instr, delta, sym->name_len, sym->name);
+        fprintf(cg->out, "\t%s\t$%d, %.*s(%%rip)\n", instr, delta, sym_asm_name_len(sym), sym_asm_name(sym));
     else
         fprintf(cg->out, "\t%s\t$%d, %d(%%rbp)\n", instr, delta, sym->offset);
 }
@@ -1389,7 +1463,8 @@ static void cg_func(codegen_t *cg, node_t *n)
     cg->func_name_len = name.len;
 
     fprintf(cg->out, "\t.text\n");
-    fprintf(cg->out, "\t.globl\t%.*s\n", name.len, name.str);
+    if (!n->func.decl_spec || n->func.decl_spec->decl_spec.storage_class != SC_STATIC)
+        fprintf(cg->out, "\t.globl\t%.*s\n", name.len, name.str);
     fprintf(cg->out, "\t.type\t%.*s, @function\n", name.len, name.str);
     fprintf(cg->out, "%.*s:\n", name.len, name.str);
     fprintf(cg->out, "\tpushq\t%%rbp\n");
@@ -1468,18 +1543,22 @@ static void cg_global_decl(codegen_t *cg, node_t *n)
     }
     node_t *init = n->global_decl.init;
 
-    fprintf(cg->out, "\t.globl\t%.*s\n", sym->name_len, sym->name);
+    if (!sym->is_static)
+        fprintf(cg->out, "\t.globl\t%.*s\n", sym_asm_name_len(sym), sym_asm_name(sym));
 
     if (init == NULL) {
-        // Uninitialized — .comm (zero-initialized by linker)
-        fprintf(cg->out, "\t.comm\t%.*s, %d, %d\n", sym->name_len, sym->name, total, align);
+        // Uninitialized — .comm (zero-initialized by linker); .local for static linkage
+        if (sym->is_static)
+            fprintf(cg->out, "\t.local\t%.*s\n", sym_asm_name_len(sym), sym_asm_name(sym));
+        fprintf(cg->out, "\t.comm\t%.*s, %d, %d\n", sym_asm_name_len(sym), sym_asm_name(sym), total,
+                align);
         return;
     }
 
     // Initialized — .data section
     fprintf(cg->out, "\t.data\n");
     fprintf(cg->out, "\t.align\t%d\n", align);
-    fprintf(cg->out, "%.*s:\n", sym->name_len, sym->name);
+    fprintf(cg->out, "%.*s:\n", sym_asm_name_len(sym), sym_asm_name(sym));
 
     if (sym->array_size > 0 && init->kind == ND_STR) {
         // char array from string literal: e.g. char s[20] = "hello"

@@ -136,7 +136,10 @@ void node_destroy(node_t *node)
             node_destroy(node->local_decl.decl_spec);
             node_destroy(node->local_decl.declarator);
             node_destroy(node->local_decl.init);
-            free(node->local_decl.sym);
+            if (node->local_decl.sym) {
+                free(node->local_decl.sym->asm_label);
+                free(node->local_decl.sym);
+            }
             break;
         case ND_GLOBAL_DECL:
             node_destroy(node->global_decl.decl_spec);
@@ -254,7 +257,8 @@ void ast_print(node_t *n, int indent)
             ast_print(n->func.comp_stmt, indent + 1);
             break;
         case ND_DECL_SPEC:
-            printf("Declaration specifiers:%d:%d:\n", n->line, n->col);
+            printf("Declaration specifiers:%d:%d:%s\n", n->line, n->col,
+                   n->decl_spec.storage_class == SC_STATIC ? " static" : "");
             ast_print(n->decl_spec.type_spec, indent + 1);
             break;
         case ND_TYPE_SPEC:

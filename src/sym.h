@@ -12,6 +12,9 @@ typedef struct sym {
     int array_size;  /* 0 = not array, positive = element count */
     int offset;      /* negative offset from %rbp (base of array for arrays) */
     int is_global;     /* 0 = local/param, 1 = global variable */
+    int is_static;     /* 1 = declared with static keyword */
+    char *asm_label;   /* non-NULL for static locals: unique assembly label (heap-allocated) */
+    int asm_label_len;
     int is_enum_const; /* 1 = enum constant (not a variable) */
     int enum_val;      /* value of enum constant (only valid if is_enum_const) */
     struct sym *next;  /* next symbol in the same scope */

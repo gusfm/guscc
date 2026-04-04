@@ -39,6 +39,7 @@ void parser_init(parser_t *p, char *buf, size_t size)
     p->struct_defs = NULL;
     p->enum_defs = NULL;
     p->enum_syms = NULL;
+    p->static_local_count = 0;
 }
 
 void parser_finish(parser_t *p)
@@ -444,12 +445,18 @@ static node_t *parser_type_specifier(parser_t *p)
 
 static node_t *parser_declaration_specifiers(parser_t *p)
 {
-    node_t *type_spec = parser_type_specifier(p);
-    if (type_spec == NULL) {
-        return NULL;
+    int storage_class = SC_NONE;
+    token_t *peek = parser_peek(p);
+    if (peek && peek->type == TOKEN_KW_STATIC) {
+        storage_class = SC_STATIC;
+        token_destroy(parser_next(p));
     }
+    node_t *type_spec = parser_type_specifier(p);
+    if (type_spec == NULL)
+        return NULL;
     node_t *node = node_create(ND_DECL_SPEC, type_spec->line, type_spec->col);
     node->decl_spec.type_spec = type_spec;
+    node->decl_spec.storage_class = storage_class;
     return node;
 }
 
@@ -777,23 +784,59 @@ static node_t *parser_local_declaration(parser_t *p)
         if (def)
             align = def->align;
     }
-    p->frame_offset = parser_align_down(p->frame_offset - total_size, align);
 
-    sym_t *sym =
-        scope_define(p->scope, declarator->direct_decl.ident.str, declarator->direct_decl.ident.len,
-                     decl_spec, pointer_level, array_size, p->frame_offset);
+    int is_static_local = (decl_spec->decl_spec.storage_class == SC_STATIC);
+    sym_t *sym;
+    if (is_static_local) {
+        // Static locals: no stack allocation; use unique asm label, accessed via %rip-relative
+        sym = scope_define(p->scope, declarator->direct_decl.ident.str,
+                           declarator->direct_decl.ident.len, decl_spec, pointer_level, array_size,
+                           0);
+        sym->is_global = 1;
+        sym->is_static = 1;
+        char buf[128];
+        int label_len = snprintf(buf, sizeof(buf), "%.*s.%d", declarator->direct_decl.ident.len,
+                                 declarator->direct_decl.ident.str, p->static_local_count++);
+        sym->asm_label = malloc((size_t)label_len + 1);
+        memcpy(sym->asm_label, buf, (size_t)label_len + 1);
+        sym->asm_label_len = label_len;
+    } else {
+        p->frame_offset = parser_align_down(p->frame_offset - total_size, align);
+        sym = scope_define(p->scope, declarator->direct_decl.ident.str,
+                           declarator->direct_decl.ident.len, decl_spec, pointer_level, array_size,
+                           p->frame_offset);
+    }
 
     node_t *init = NULL;
     if (parser_accept(p, '=')) {
         init = parser_initializer(p);
         if (init == NULL) {
+            p->scope->syms = sym->next;
+            free(sym->asm_label);
+            free(sym);
             node_destroy(decl_spec);
             node_destroy(declarator);
+            return NULL;
+        }
+        // Static locals require constant initializers
+        if (is_static_local && init->kind != ND_NUM && init->kind != ND_STR &&
+            init->kind != ND_INITIALIZER_LIST) {
+            fprintf(stderr, "%d:%d: error: initializer for static variable is not a constant\n",
+                    init->line, init->col);
+            p->scope->syms = sym->next;
+            free(sym->asm_label);
+            free(sym);
+            node_destroy(decl_spec);
+            node_destroy(declarator);
+            node_destroy(init);
             return NULL;
         }
     }
 
     if (!parser_expect(p, ';')) {
+        p->scope->syms = sym->next;
+        free(sym->asm_label);
+        free(sym);
         node_destroy(decl_spec);
         node_destroy(declarator);
         node_destroy(init);
@@ -814,6 +857,12 @@ static node_t *parser_type_name(parser_t *p)
     node_t *decl_spec = parser_declaration_specifiers(p);
     if (decl_spec == NULL)
         return NULL;
+    if (decl_spec->decl_spec.storage_class != SC_NONE) {
+        fprintf(stderr, "%d:%d: error: storage class specifier not allowed in type name\n",
+                decl_spec->line, decl_spec->col);
+        node_destroy(decl_spec);
+        return NULL;
+    }
 
     // Parse optional abstract declarator (starts with '*', '(', or '[')
     token_t *peek = parser_peek(p);
@@ -1935,7 +1984,8 @@ static bool parser_block_item_list(parser_t *p, node_t *comp)
 {
     while (parser_peek(p)->type != '}') {
         node_t *item;
-        if (parser_is_type_token(parser_peek(p)->type))
+        if (parser_is_type_token(parser_peek(p)->type) ||
+            parser_peek(p)->type == TOKEN_KW_STATIC)
             item = parser_local_declaration(p);
         else
             item = parser_statement(p);
@@ -2093,6 +2143,8 @@ static node_t *parser_declaration_body(parser_t *p, node_t *decl_spec, node_t *d
                                   declarator->direct_decl.ident.len, decl_spec, pointer_level,
                                   array_size, 0);
         sym->is_global = 1;
+        if (decl_spec->decl_spec.storage_class == SC_STATIC)
+            sym->is_static = 1;
         n->global_decl.sym = sym;
     } else {
         n->global_decl.sym = NULL;

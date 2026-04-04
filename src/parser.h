@@ -16,6 +16,7 @@ typedef struct {
     struct_def_t *struct_defs; // Registry of parsed struct definitions
     enum_def_t *enum_defs;    // Registry of parsed enum definitions
     sym_t *enum_syms;         // Enum constant sym_t nodes (owned here, freed at finish)
+    int static_local_count;   // Counter for generating unique static local labels
 } parser_t;
 
 void parser_init(parser_t *p, char *buf, size_t size);

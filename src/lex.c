@@ -76,6 +76,8 @@ static token_type_t get_token_type(char *s, int len)
         return TOKEN_KW_SHORT;
     if (len == 4 && strncmp(s, "long", 4) == 0)
         return TOKEN_KW_LONG;
+    if (len == 6 && strncmp(s, "static", 6) == 0)
+        return TOKEN_KW_STATIC;
     return TOKEN_IDENT;
 }
 

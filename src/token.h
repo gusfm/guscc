@@ -26,6 +26,7 @@ typedef enum {
     TOKEN_KW_ENUM,       // enum keyword
     TOKEN_KW_SHORT,      // short keyword
     TOKEN_KW_LONG,       // long keyword
+    TOKEN_KW_STATIC,     // static keyword
     TOKEN_INC_OP,        // ++
     TOKEN_DEC_OP,        // --
     TOKEN_PTR_OP,        // ->

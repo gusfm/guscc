@@ -22,6 +22,7 @@ void sym_destroy_list(sym_t *sym)
 {
     while (sym != NULL) {
         sym_t *next = sym->next;
+        free(sym->asm_label);
         free(sym);
         sym = next;
     }
@@ -38,6 +39,9 @@ sym_t *scope_define(scope_t *scope, const char *name, int name_len, node_t *decl
     s->array_size = array_size;
     s->offset = offset;
     s->is_global = 0;
+    s->is_static = 0;
+    s->asm_label = NULL;
+    s->asm_label_len = 0;
     s->is_enum_const = 0;
     s->enum_val = 0;
     s->next = scope->syms;

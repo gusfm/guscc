@@ -3,6 +3,10 @@
 
 #include "token.h"
 
+/* Storage class specifier constants */
+#define SC_NONE 0
+#define SC_STATIC 1
+
 /* Forward declarations — sym.h includes ast.h, so we forward-declare here */
 typedef struct sym sym_t;
 typedef struct struct_def struct_def_t;
@@ -87,9 +91,10 @@ struct node {
         } enum_spec;        // used when kind == ND_ENUM_SPEC
 
         struct {
-            node_t *type_spec; // ND_TYPE_SPEC, ND_STRUCT_SPEC, or ND_ENUM_SPEC
-            int pointer_level; // for abstract declarators (cast / sizeof)
-        } decl_spec;           // used when kind == ND_DECL_SPEC
+            node_t *type_spec;  // ND_TYPE_SPEC, ND_STRUCT_SPEC, or ND_ENUM_SPEC
+            int pointer_level;  // for abstract declarators (cast / sizeof)
+            int storage_class;  // SC_NONE or SC_STATIC
+        } decl_spec;            // used when kind == ND_DECL_SPEC
 
         struct {
             node_t *decl_spec;      // return type

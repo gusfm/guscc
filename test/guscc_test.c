@@ -625,6 +625,41 @@ static int guscc_test_fail_short_short(void)
     return 0;
 }
 
+/* Static storage class */
+static int guscc_test_static_global_var(void)
+{
+    return compile_and_run("../test/files/static_global_var.c", 42);
+}
+
+static int guscc_test_static_func(void) { return compile_and_run("../test/files/static_func.c", 42); }
+
+static int guscc_test_static_local_basic(void)
+{
+    return compile_and_run("../test/files/static_local_basic.c", 3);
+}
+
+static int guscc_test_static_local_uninit(void)
+{
+    return compile_and_run("../test/files/static_local_uninit.c", 42);
+}
+
+static int guscc_test_static_local_two_funcs(void)
+{
+    return compile_and_run("../test/files/static_local_two_funcs.c", 42);
+}
+
+static int guscc_test_static_local_array(void)
+{
+    return compile_and_run("../test/files/static_local_array.c", 42);
+}
+
+static int guscc_test_fail_static_nonconstant_init(void)
+{
+    int ret = compile_file("../test/files/fail_static_nonconstant_init.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -776,4 +811,13 @@ void guscc_test(void)
     ut_run(guscc_test_fail_global_nonconstant_init);
     ut_run(guscc_test_fail_ellipsis_only);
     ut_run(guscc_test_fail_short_short);
+    ut_run(guscc_test_fail_static_nonconstant_init);
+
+    /* Static storage class */
+    ut_run(guscc_test_static_global_var);
+    ut_run(guscc_test_static_func);
+    ut_run(guscc_test_static_local_basic);
+    ut_run(guscc_test_static_local_uninit);
+    ut_run(guscc_test_static_local_two_funcs);
+    ut_run(guscc_test_static_local_array);
 }
