@@ -68,6 +68,8 @@ void token_print(token_t *t)
         printf("STATIC ");
     } else if (type == TOKEN_KW_EXTERN) {
         printf("EXTERN ");
+    } else if (type == TOKEN_KW_CONST) {
+        printf("CONST ");
     } else if (type == TOKEN_INC_OP) {
         printf("++ ");
     } else if (type == TOKEN_DEC_OP) {
@@ -150,6 +152,8 @@ const char *token_type_to_str(token_type_t type, char *str, size_t len)
         snprintf(str, len, "static");
     } else if (type == TOKEN_KW_EXTERN) {
         snprintf(str, len, "extern");
+    } else if (type == TOKEN_KW_CONST) {
+        snprintf(str, len, "const");
     } else if (type == TOKEN_INC_OP) {
         snprintf(str, len, "'++'");
     } else if (type == TOKEN_DEC_OP) {

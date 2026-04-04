@@ -446,20 +446,32 @@ static node_t *parser_type_specifier(parser_t *p)
 static node_t *parser_declaration_specifiers(parser_t *p)
 {
     int storage_class = SC_NONE;
-    token_t *peek = parser_peek(p);
-    if (peek && peek->type == TOKEN_KW_STATIC) {
-        storage_class = SC_STATIC;
-        token_destroy(parser_next(p));
-    } else if (peek && peek->type == TOKEN_KW_EXTERN) {
-        storage_class = SC_EXTERN;
-        token_destroy(parser_next(p));
+    int type_qualifier = TQ_NONE;
+    // Consume storage class specifiers and type qualifiers before the type specifier
+    for (;;) {
+        token_t *peek = parser_peek(p);
+        if (peek && (peek->type == TOKEN_KW_STATIC || peek->type == TOKEN_KW_EXTERN)) {
+            storage_class = (peek->type == TOKEN_KW_STATIC) ? SC_STATIC : SC_EXTERN;
+            token_destroy(parser_next(p));
+        } else if (peek && peek->type == TOKEN_KW_CONST) {
+            type_qualifier |= TQ_CONST;
+            token_destroy(parser_next(p));
+        } else {
+            break;
+        }
     }
     node_t *type_spec = parser_type_specifier(p);
     if (type_spec == NULL)
         return NULL;
+    // Accept trailing const after type specifier (e.g. "int const x")
+    if (parser_peek(p)->type == TOKEN_KW_CONST) {
+        type_qualifier |= TQ_CONST;
+        token_destroy(parser_next(p));
+    }
     node_t *node = node_create(ND_DECL_SPEC, type_spec->line, type_spec->col);
     node->decl_spec.type_spec = type_spec;
     node->decl_spec.storage_class = storage_class;
+    node->decl_spec.type_qualifier = type_qualifier;
     return node;
 }
 
@@ -615,19 +627,34 @@ static node_t *parser_direct_declarator(parser_t *p, decl_mode_t mode)
     return n;
 }
 
-int parser_pointer(parser_t *p)
+static int parser_pointer_ex(parser_t *p, int *trailing_const)
 {
     int pointer_level = 0;
-    while (parser_accept(p, '*'))
+    *trailing_const = 0;
+    while (parser_accept(p, '*')) {
         pointer_level++;
+        *trailing_const = 0;
+        // Skip optional type qualifiers after '*' (e.g. "* const")
+        while (parser_peek(p)->type == TOKEN_KW_CONST) {
+            token_destroy(parser_next(p));
+            *trailing_const = 1;
+        }
+    }
     return pointer_level;
+}
+
+int parser_pointer(parser_t *p)
+{
+    int trailing_const;
+    return parser_pointer_ex(p, &trailing_const);
 }
 
 static node_t *parser_declarator_mode(parser_t *p, decl_mode_t mode)
 {
     int pointer_level = 0;
+    int trailing_const = 0;
     if (parser_peek(p)->type == '*') {
-        pointer_level = parser_pointer(p);
+        pointer_level = parser_pointer_ex(p, &trailing_const);
         if (pointer_level <= 0)
             return NULL;
     }
@@ -644,6 +671,7 @@ static node_t *parser_declarator_mode(parser_t *p, decl_mode_t mode)
             n->direct_decl.ident.len = 0;
             n->direct_decl.pointer_level = pointer_level;
             n->direct_decl.array_size = 0;
+            n->direct_decl.is_const_qualified = trailing_const;
             n->direct_decl.param_list = NULL;
             return n;
         }
@@ -653,6 +681,8 @@ static node_t *parser_declarator_mode(parser_t *p, decl_mode_t mode)
     if (n == NULL)
         return NULL;
     n->direct_decl.pointer_level += pointer_level;
+    if (trailing_const)
+        n->direct_decl.is_const_qualified = 1;
     return n;
 }
 
@@ -665,7 +695,7 @@ static bool parser_is_type_token(token_type_t type)
 {
     return type == TOKEN_KW_INT || type == TOKEN_KW_CHAR || type == TOKEN_KW_VOID ||
            type == TOKEN_KW_SHORT || type == TOKEN_KW_LONG ||
-           type == TOKEN_KW_STRUCT || type == TOKEN_KW_ENUM;
+           type == TOKEN_KW_STRUCT || type == TOKEN_KW_ENUM || type == TOKEN_KW_CONST;
 }
 
 /* Return the byte size of a type given its decl_spec and pointer level */
@@ -817,6 +847,12 @@ static node_t *parser_local_declaration(parser_t *p)
                            declarator->direct_decl.ident.len, decl_spec, pointer_level, array_size,
                            p->frame_offset);
     }
+
+    // Propagate const qualifier to symbol
+    if ((decl_spec->decl_spec.type_qualifier & TQ_CONST) && pointer_level == 0)
+        sym->is_const = 1; // const scalar/struct/array
+    if (declarator->direct_decl.is_const_qualified && pointer_level > 0)
+        sym->is_const = 1; // const pointer: "int * const p"
 
     node_t *init = NULL;
     if (parser_accept(p, '=')) {
@@ -1104,6 +1140,12 @@ static node_t *parser_postfix_expression(parser_t *p)
             node = mem;
 
         } else if (peek->type == TOKEN_INC_OP || peek->type == TOKEN_DEC_OP) {
+            if (node->kind == ND_IDENT && node->ident.sym && node->ident.sym->is_const) {
+                fprintf(stderr, "%d:%d: error: cannot modify const variable '%.*s'\n", peek->line,
+                        peek->col, node->ident.name.len, node->ident.name.str);
+                node_destroy(node);
+                return NULL;
+            }
             token_t *op_tok = parser_next(p);
             node_t *post = node_create(ND_POSTOP, op_tok->line, op_tok->col);
             post->postop.op = op_tok->type;
@@ -1140,6 +1182,13 @@ static node_t *parser_unary_expression(parser_t *p)
         node_t *operand = parser_unary_expression(p);
         if (operand == NULL) {
             token_destroy(op_tok);
+            return NULL;
+        }
+        if (operand->kind == ND_IDENT && operand->ident.sym && operand->ident.sym->is_const) {
+            fprintf(stderr, "%d:%d: error: cannot modify const variable '%.*s'\n", op_tok->line,
+                    op_tok->col, operand->ident.name.len, operand->ident.name.str);
+            token_destroy(op_tok);
+            node_destroy(operand);
             return NULL;
         }
         node_t *n = node_create(ND_UNOP, op_tok->line, op_tok->col);
@@ -1638,6 +1687,12 @@ static node_t *parser_assignment_expression(parser_t *p)
     token_t *op_tok = parser_next(p);
     int op = op_tok->type, line = op_tok->line, col = op_tok->col;
     token_destroy(op_tok);
+    if (lhs->kind == ND_IDENT && lhs->ident.sym && lhs->ident.sym->is_const) {
+        fprintf(stderr, "%d:%d: error: cannot assign to const variable '%.*s'\n", line, col,
+                lhs->ident.name.len, lhs->ident.name.str);
+        node_destroy(lhs);
+        return NULL;
+    }
     node_t *rhs = parser_assignment_expression(p); // right-recursive
     if (rhs == NULL) {
         node_destroy(lhs);
@@ -2085,9 +2140,14 @@ static node_t *parser_function_definition(parser_t *p, node_t *decl_spec, node_t
             }
             int size = parser_sym_size(pd->param_decl.decl_spec, ptr_lvl);
             p->frame_offset = parser_align_down(p->frame_offset - size, size < 8 ? size : 8);
-            scope_define(p->scope, pd->param_decl.declarator->direct_decl.ident.str,
-                         pd->param_decl.declarator->direct_decl.ident.len, pd->param_decl.decl_spec,
-                         ptr_lvl, arr_sz, p->frame_offset);
+            sym_t *param_sym =
+                scope_define(p->scope, pd->param_decl.declarator->direct_decl.ident.str,
+                             pd->param_decl.declarator->direct_decl.ident.len,
+                             pd->param_decl.decl_spec, ptr_lvl, arr_sz, p->frame_offset);
+            if ((pd->param_decl.decl_spec->decl_spec.type_qualifier & TQ_CONST) && ptr_lvl == 0)
+                param_sym->is_const = 1;
+            if (pd->param_decl.declarator->direct_decl.is_const_qualified && ptr_lvl > 0)
+                param_sym->is_const = 1;
         }
     }
 
@@ -2179,6 +2239,10 @@ static node_t *parser_declaration_body(parser_t *p, node_t *decl_spec, node_t *d
             sym->is_static = 1;
         else if (decl_spec->decl_spec.storage_class == SC_EXTERN)
             sym->is_extern = 1;
+        if ((decl_spec->decl_spec.type_qualifier & TQ_CONST) && pointer_level == 0)
+            sym->is_const = 1;
+        if (declarator->direct_decl.is_const_qualified && pointer_level > 0)
+            sym->is_const = 1;
         n->global_decl.sym = sym;
     } else {
         n->global_decl.sym = NULL;

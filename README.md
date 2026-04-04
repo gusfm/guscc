@@ -2,7 +2,7 @@
 
 A recursive-descent C compiler written in C99, targeting x86-64 Linux (System V ABI). The goal is eventual self-hosting.
 
-It compiles a subset of C — covering `void`/`char`/`int` scalar types, pointers, 1D arrays, structs, enums, `static`/`extern` storage classes, variadic function declarations (`...`), pointer arithmetic, and the usual control flow (`if`/`else`, `switch`/`case`/`default`, `while`, `do-while`, `for`, `break`, `continue`, `return`) — directly to a native binary. By default only errors go to stderr; pass `-d` to also dump the source with line numbers, the token stream, and the AST.
+It compiles a subset of C — covering `void`/`char`/`int` scalar types, pointers, 1D arrays, structs, enums, `static`/`extern` storage classes, `const` type qualifier, variadic function declarations (`...`), pointer arithmetic, and the usual control flow (`if`/`else`, `switch`/`case`/`default`, `while`, `do-while`, `for`, `break`, `continue`, `return`) — directly to a native binary. By default only errors go to stderr; pass `-d` to also dump the source with line numbers, the token stream, and the AST.
 
 ## Requirements
 

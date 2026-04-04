@@ -8,6 +8,10 @@
 #define SC_STATIC 1
 #define SC_EXTERN 2
 
+/* Type qualifier flags */
+#define TQ_NONE 0
+#define TQ_CONST 1
+
 /* Forward declarations — sym.h includes ast.h, so we forward-declare here */
 typedef struct sym sym_t;
 typedef struct struct_def struct_def_t;
@@ -94,8 +98,9 @@ struct node {
         struct {
             node_t *type_spec;  // ND_TYPE_SPEC, ND_STRUCT_SPEC, or ND_ENUM_SPEC
             int pointer_level;  // for abstract declarators (cast / sizeof)
-            int storage_class;  // SC_NONE or SC_STATIC
-        } decl_spec;            // used when kind == ND_DECL_SPEC
+            int storage_class;   // SC_NONE, SC_STATIC, or SC_EXTERN
+            int type_qualifier;  // TQ_NONE or TQ_CONST
+        } decl_spec;             // used when kind == ND_DECL_SPEC
 
         struct {
             node_t *decl_spec;      // return type
@@ -119,9 +124,10 @@ struct node {
         struct {
             node_str_t ident;   // function or variable name
             int pointer_level;  // number of leading '*' stars
-            int array_size;     // 0 = not array, positive = element count, -1 = unsized ([])
-            node_t *param_list; // NULL for non-function declarators
-        } direct_decl;          // used when kind == ND_DIRECT_DECL
+            int array_size;        // 0 = not array, positive = element count, -1 = unsized ([])
+            int is_const_qualified; // 1 if outermost '*' had trailing const (e.g. int * const p)
+            node_t *param_list;    // NULL for non-function declarators
+        } direct_decl;             // used when kind == ND_DIRECT_DECL
 
         struct {
             int nstmts;        // number of entries in stmts[]

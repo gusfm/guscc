@@ -1561,8 +1561,11 @@ static void cg_global_decl(codegen_t *cg, node_t *n)
         return;
     }
 
-    // Initialized — .data section
-    fprintf(cg->out, "\t.data\n");
+    // Initialized — .rodata for const, .data otherwise
+    if (sym->is_const)
+        fprintf(cg->out, "\t.section\t.rodata\n");
+    else
+        fprintf(cg->out, "\t.data\n");
     fprintf(cg->out, "\t.align\t%d\n", align);
     fprintf(cg->out, "%.*s:\n", sym_asm_name_len(sym), sym_asm_name(sym));
 

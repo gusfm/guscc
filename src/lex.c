@@ -80,6 +80,8 @@ static token_type_t get_token_type(char *s, int len)
         return TOKEN_KW_STATIC;
     if (len == 6 && strncmp(s, "extern", 6) == 0)
         return TOKEN_KW_EXTERN;
+    if (len == 5 && strncmp(s, "const", 5) == 0)
+        return TOKEN_KW_CONST;
     return TOKEN_IDENT;
 }
 

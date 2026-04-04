@@ -690,6 +690,72 @@ static int guscc_test_fail_extern_local_init(void)
     return 0;
 }
 
+/* Const type qualifier */
+static int guscc_test_const_local_basic(void)
+{
+    return compile_and_run("../test/files/const_local_basic.c", 42);
+}
+
+static int guscc_test_const_global_basic(void)
+{
+    return compile_and_run("../test/files/const_global_basic.c", 42);
+}
+
+static int guscc_test_const_param(void)
+{
+    return compile_and_run("../test/files/const_param.c", 42);
+}
+
+static int guscc_test_const_pointer_to_const(void)
+{
+    return compile_and_run("../test/files/const_pointer_to_const.c", 10);
+}
+
+static int guscc_test_const_ptr_const(void)
+{
+    return compile_and_run("../test/files/const_ptr_const.c", 42);
+}
+
+static int guscc_test_const_cast_sizeof(void)
+{
+    return compile_and_run("../test/files/const_cast_sizeof.c", 4);
+}
+
+static int guscc_test_fail_const_assign(void)
+{
+    int ret = compile_file("../test/files/fail_const_assign.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
+static int guscc_test_fail_const_increment(void)
+{
+    int ret = compile_file("../test/files/fail_const_increment.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
+static int guscc_test_fail_const_decrement(void)
+{
+    int ret = compile_file("../test/files/fail_const_decrement.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
+static int guscc_test_fail_const_compound_assign(void)
+{
+    int ret = compile_file("../test/files/fail_const_compound_assign.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
+static int guscc_test_fail_const_ptr_reassign(void)
+{
+    int ret = compile_file("../test/files/fail_const_ptr_reassign.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -857,4 +923,17 @@ void guscc_test(void)
     ut_run(guscc_test_extern_local_var);
     ut_run(guscc_test_fail_extern_global_init);
     ut_run(guscc_test_fail_extern_local_init);
+
+    /* Const type qualifier */
+    ut_run(guscc_test_const_local_basic);
+    ut_run(guscc_test_const_global_basic);
+    ut_run(guscc_test_const_param);
+    ut_run(guscc_test_const_pointer_to_const);
+    ut_run(guscc_test_const_ptr_const);
+    ut_run(guscc_test_const_cast_sizeof);
+    ut_run(guscc_test_fail_const_assign);
+    ut_run(guscc_test_fail_const_increment);
+    ut_run(guscc_test_fail_const_decrement);
+    ut_run(guscc_test_fail_const_compound_assign);
+    ut_run(guscc_test_fail_const_ptr_reassign);
 }
