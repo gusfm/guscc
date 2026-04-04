@@ -146,8 +146,17 @@ token_t *lex_next(lex_t *l)
         case '~':
         case '?':
         case ':':
-        case '.':
             return token_create(c, l->p - 1, l->p, tok_line, tok_col);
+        case '.':
+            c2 = lex_readc(l);
+            if (c2 == '.') {
+                c3 = lex_readc(l);
+                if (c3 == '.')
+                    return token_create(TOKEN_ELLIPSIS, l->p - 3, l->p, tok_line, tok_col);
+                lex_ungetc(l);
+            }
+            lex_ungetc(l);
+            return token_create('.', l->p - 1, l->p, tok_line, tok_col);
         case '+':
             c2 = lex_readc(l);
             if (c2 == '+')

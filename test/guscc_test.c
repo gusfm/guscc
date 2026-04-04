@@ -545,6 +545,23 @@ static int guscc_test_fail_global_nonconstant_init(void)
     return 0;
 }
 
+static int guscc_test_variadic_decl(void)
+{
+    return compile_and_run("../test/files/variadic_decl.c", 42);
+}
+
+static int guscc_test_variadic_fwd_decl(void)
+{
+    return compile_and_run("../test/files/variadic_fwd_decl.c", 10);
+}
+
+static int guscc_test_fail_ellipsis_only(void)
+{
+    int ret = compile_file("../test/files/fail_ellipsis_only.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -662,6 +679,10 @@ void guscc_test(void)
     ut_run(guscc_test_switch_break);
     ut_run(guscc_test_switch_nested_loop);
 
+    /* Variadic functions */
+    ut_run(guscc_test_variadic_decl);
+    ut_run(guscc_test_variadic_fwd_decl);
+
     /* Failure paths */
     ut_run(guscc_test_fail_switch_no_paren);
     ut_run(guscc_test_fail_enum_no_brace);
@@ -674,4 +695,5 @@ void guscc_test(void)
     ut_run(guscc_test_fail_array_unsized);
     ut_run(guscc_test_fail_deref_nonptr);
     ut_run(guscc_test_fail_global_nonconstant_init);
+    ut_run(guscc_test_fail_ellipsis_only);
 }

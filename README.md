@@ -2,7 +2,7 @@
 
 A recursive-descent C compiler written in C99, targeting x86-64 Linux (System V ABI). The goal is eventual self-hosting.
 
-It compiles a subset of C — covering `void`/`char`/`int` scalar types, pointers, 1D arrays, structs, enums, pointer arithmetic, and the usual control flow (`if`/`else`, `switch`/`case`/`default`, `while`, `do-while`, `for`, `break`, `continue`, `return`) — directly to a native binary. By default only errors go to stderr; pass `-d` to also dump the source with line numbers, the token stream, and the AST.
+It compiles a subset of C — covering `void`/`char`/`int` scalar types, pointers, 1D arrays, structs, enums, variadic function declarations (`...`), pointer arithmetic, and the usual control flow (`if`/`else`, `switch`/`case`/`default`, `while`, `do-while`, `for`, `break`, `continue`, `return`) — directly to a native binary. By default only errors go to stderr; pass `-d` to also dump the source with line numbers, the token stream, and the AST.
 
 ## Requirements
 
@@ -71,4 +71,5 @@ Parameters are assigned negative `%rbp` offsets in declaration order (first para
 - 1D arrays only; no multi-dimensional arrays or `sizeof(int[5])` (array in type-name context)
 - Only named struct definitions; no anonymous structs, no nested struct types, no struct assignment
 - Forward function calls (callee defined later in the file) produce an "undeclared identifier" warning; forward declarations with unnamed parameters are supported
+- Variadic functions (`...`) can be declared and defined, but `va_list`/`va_start`/`va_arg` are not built-in (would come from `<stdarg.h>`)
 - Parenthesized abstract declarators (function pointer syntax like `int (*)(int)`) are parsed but not code-generated

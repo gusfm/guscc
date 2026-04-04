@@ -61,6 +61,7 @@ Parameters are assigned negative `%rbp` offsets in declaration order (first para
 - Enums supported: named and anonymous definitions, explicit and auto-incrementing values; enumerator constants are visible in the enclosing scope; `enum` type is equivalent to `int` (4 bytes); enumerator initializers must be integer literals (no complex constant expressions)
 - Only named struct definitions; no anonymous structs, no nested struct types, no struct assignment
 - Forward function calls (callee defined later) produce an "undeclared identifier" warning; forward declarations with unnamed parameters are supported
+- Variadic functions (`...`) supported in declarations and definitions; ellipsis must follow at least one named parameter per the C grammar (`parameter_list ',' ELLIPSIS`); `va_list`/`va_start`/`va_arg` are not built-in; all calls emit `xorl %eax, %eax` (zero SSE args) for System V ABI compliance
 - Parenthesized abstract declarators (function pointer syntax) are parsed but not code-generated
 - `switch`/`case`/`default` supported with fall-through semantics and `break`; case values must be integer literals (or negated integer literals); no computed gotos or range expressions
 - Global variable declarations supported: initialized and uninitialized scalars, arrays, char arrays from string literals, and pointer-to-string globals; all use `%rip`-relative addressing; no `static`/`extern` yet; struct globals must be uninitialized

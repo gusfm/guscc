@@ -978,6 +978,9 @@ static void cg_call(codegen_t *cg, node_t *n)
     for (int i = 0; i < reg_args; i++)
         fprintf(cg->out, "\tpopq\t%s\n", arg_regs64[i]);
 
+    // Zero %al for variadic call ABI compliance (no floating-point args)
+    fprintf(cg->out, "\txorl\t%%eax, %%eax\n");
+
     // Emit the call
     node_t *func = n->call.func;
     if (func->kind == ND_IDENT) {

@@ -271,7 +271,8 @@ void ast_print(node_t *n, int indent)
             ast_print(n->param_decl.declarator, indent + 1);
             break;
         case ND_PARAM_LIST:
-            printf("Parameter list:%d:%d:\n", n->line, n->col);
+            printf("Parameter list:%d:%d:%s\n", n->line, n->col,
+                   n->param_list.is_variadic ? " (variadic)" : "");
             for (int i = 0; i < n->param_list.nparams; ++i) {
                 ast_print(n->param_list.params[i], indent + 1);
             }

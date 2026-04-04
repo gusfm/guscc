@@ -463,9 +463,16 @@ node_t *parser_parameter_list(parser_t *p)
 
     node_t *n = node_create(ND_PARAM_LIST, param_decl->line, param_decl->col);
     n->param_list.params[0] = param_decl;
+    n->param_list.is_variadic = 0;
 
     int nparams = 1;
     while (parser_accept(p, ',')) {
+        if (parser_peek(p)->type == TOKEN_ELLIPSIS) {
+            token_t *tok = parser_next(p);
+            token_destroy(tok);
+            n->param_list.is_variadic = 1;
+            break;
+        }
         param_decl = parser_parameter_declaration(p);
         if (param_decl == NULL)
             return NULL;

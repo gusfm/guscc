@@ -45,6 +45,7 @@ typedef enum {
     TOKEN_AND_ASSIGN,    // &=
     TOKEN_XOR_ASSIGN,    // ^=
     TOKEN_OR_ASSIGN,     // |=
+    TOKEN_ELLIPSIS,      // ...
     TOKEN_EOF
 } token_type_t;
 

@@ -105,6 +105,7 @@ struct node {
         struct {
             int nparams;       // number of entries in params[]
             node_t *params[8]; // MAX_PARAM == 8
+            int is_variadic;   // 1 if parameter list ends with '...'
         } param_list;          // used when kind == ND_PARAM_LIST
 
         struct {

@@ -102,6 +102,8 @@ void token_print(token_t *t)
         printf("^= ");
     } else if (type == TOKEN_OR_ASSIGN) {
         printf("|= ");
+    } else if (type == TOKEN_ELLIPSIS) {
+        printf("... ");
     } else if (type == TOKEN_EOF)
         printf("EOF");
     else
@@ -174,6 +176,8 @@ const char *token_type_to_str(token_type_t type, char *str, size_t len)
         snprintf(str, len, "'^='");
     } else if (type == TOKEN_OR_ASSIGN) {
         snprintf(str, len, "'|='");
+    } else if (type == TOKEN_ELLIPSIS) {
+        snprintf(str, len, "'...'");
     } else {
         snprintf(str, len, "not implemented");
     }
