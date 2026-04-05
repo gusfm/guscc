@@ -290,6 +290,17 @@ static int lex_test_7(void)
     return 0;
 }
 
+static int lex_test_8(void)
+{
+    lex_t lex;
+    char src[] = "typedef typedefx";
+    lex_init(&lex, src, sizeof(src));
+    ASSERT(check_next_token(&lex, TOKEN_KW_TYPEDEF) == 0);
+    ASSERT(check_next_token_str(&lex, TOKEN_IDENT, "typedefx") == 0);
+    ASSERT(lex_next(&lex) == NULL);
+    return 0;
+}
+
 void lex_test(void)
 {
     ut_run(lex_test_1);
@@ -299,4 +310,5 @@ void lex_test(void)
     ut_run(lex_test_5);
     ut_run(lex_test_6);
     ut_run(lex_test_7);
+    ut_run(lex_test_8);
 }

@@ -39,6 +39,8 @@ void parser_init(parser_t *p, char *buf, size_t size)
     p->struct_defs = NULL;
     p->enum_defs = NULL;
     p->enum_syms = NULL;
+    p->typedef_defs = NULL;
+    p->typedef_pointer_level = 0;
     p->static_local_count = 0;
 }
 
@@ -68,6 +70,8 @@ void parser_finish(parser_t *p)
     p->enum_defs = NULL;
     sym_destroy_list(p->enum_syms);
     p->enum_syms = NULL;
+    typedef_def_destroy_list(p->typedef_defs);
+    p->typedef_defs = NULL;
 }
 
 token_t *parser_peek(parser_t *p)
@@ -404,6 +408,27 @@ static node_t *parser_type_specifier(parser_t *p)
     if (peek != NULL && peek->type == TOKEN_KW_ENUM)
         return parser_enum_specifier(p);
 
+    // Check for typedef name (TYPE_NAME in the grammar)
+    if (peek != NULL && peek->type == TOKEN_IDENT) {
+        typedef_def_t *td = typedef_def_lookup(p->typedef_defs, peek->sval, peek->len);
+        if (td != NULL) {
+            token_t *tok = parser_next(p);
+            node_t *orig = td->decl_spec->decl_spec.type_spec;
+            node_t *cloned = node_create(orig->kind, tok->line, tok->col);
+            if (orig->kind == ND_TYPE_SPEC) {
+                cloned->type_spec = orig->type_spec;
+            } else if (orig->kind == ND_STRUCT_SPEC) {
+                cloned->struct_spec.tag = orig->struct_spec.tag;
+                cloned->struct_spec.def = orig->struct_spec.def;
+            } else if (orig->kind == ND_ENUM_SPEC) {
+                cloned->enum_spec.tag = orig->enum_spec.tag;
+            }
+            p->typedef_pointer_level = td->pointer_level;
+            token_destroy(tok);
+            return cloned;
+        }
+    }
+
     token_t *tok = parser_next(p);
     node_t *node = node_create(ND_TYPE_SPEC, tok->line, tok->col);
     if (tok->type == TOKEN_KW_VOID) {
@@ -450,8 +475,14 @@ static node_t *parser_declaration_specifiers(parser_t *p)
     // Consume storage class specifiers and type qualifiers before the type specifier
     for (;;) {
         token_t *peek = parser_peek(p);
-        if (peek && (peek->type == TOKEN_KW_STATIC || peek->type == TOKEN_KW_EXTERN)) {
-            storage_class = (peek->type == TOKEN_KW_STATIC) ? SC_STATIC : SC_EXTERN;
+        if (peek && (peek->type == TOKEN_KW_STATIC || peek->type == TOKEN_KW_EXTERN ||
+                     peek->type == TOKEN_KW_TYPEDEF)) {
+            if (peek->type == TOKEN_KW_STATIC)
+                storage_class = SC_STATIC;
+            else if (peek->type == TOKEN_KW_EXTERN)
+                storage_class = SC_EXTERN;
+            else
+                storage_class = SC_TYPEDEF;
             token_destroy(parser_next(p));
         } else if (peek && peek->type == TOKEN_KW_CONST) {
             type_qualifier |= TQ_CONST;
@@ -460,9 +491,11 @@ static node_t *parser_declaration_specifiers(parser_t *p)
             break;
         }
     }
+    p->typedef_pointer_level = 0;
     node_t *type_spec = parser_type_specifier(p);
     if (type_spec == NULL)
         return NULL;
+    int typedef_ptrlvl = p->typedef_pointer_level;
     // Accept trailing const after type specifier (e.g. "int const x")
     if (parser_peek(p)->type == TOKEN_KW_CONST) {
         type_qualifier |= TQ_CONST;
@@ -470,6 +503,7 @@ static node_t *parser_declaration_specifiers(parser_t *p)
     }
     node_t *node = node_create(ND_DECL_SPEC, type_spec->line, type_spec->col);
     node->decl_spec.type_spec = type_spec;
+    node->decl_spec.pointer_level = typedef_ptrlvl;
     node->decl_spec.storage_class = storage_class;
     node->decl_spec.type_qualifier = type_qualifier;
     return node;
@@ -691,11 +725,16 @@ static node_t *parser_declarator(parser_t *p)
     return parser_declarator_mode(p, DECL_CONCRETE);
 }
 
-static bool parser_is_type_token(token_type_t type)
+static bool parser_is_type_token(parser_t *p, token_t *tok)
 {
-    return type == TOKEN_KW_INT || type == TOKEN_KW_CHAR || type == TOKEN_KW_VOID ||
-           type == TOKEN_KW_SHORT || type == TOKEN_KW_LONG ||
-           type == TOKEN_KW_STRUCT || type == TOKEN_KW_ENUM || type == TOKEN_KW_CONST;
+    token_type_t type = tok->type;
+    if (type == TOKEN_KW_INT || type == TOKEN_KW_CHAR || type == TOKEN_KW_VOID ||
+        type == TOKEN_KW_SHORT || type == TOKEN_KW_LONG ||
+        type == TOKEN_KW_STRUCT || type == TOKEN_KW_ENUM || type == TOKEN_KW_CONST)
+        return true;
+    if (type == TOKEN_IDENT && typedef_def_lookup(p->typedef_defs, tok->sval, tok->len))
+        return true;
+    return false;
 }
 
 /* Return the byte size of a type given its decl_spec and pointer level */
@@ -795,7 +834,30 @@ static node_t *parser_local_declaration(parser_t *p)
         return NULL;
     }
 
-    int pointer_level = declarator->direct_decl.pointer_level;
+    // Handle block-scope typedef declaration
+    if (decl_spec->decl_spec.storage_class == SC_TYPEDEF) {
+        if (!parser_expect(p, ';')) {
+            node_destroy(decl_spec);
+            node_destroy(declarator);
+            return NULL;
+        }
+        typedef_def_t *td = malloc(sizeof(typedef_def_t));
+        td->name = declarator->direct_decl.ident.str;
+        td->name_len = declarator->direct_decl.ident.len;
+        td->decl_spec = decl_spec;
+        td->pointer_level = declarator->direct_decl.pointer_level + decl_spec->decl_spec.pointer_level;
+        td->next = p->typedef_defs;
+        p->typedef_defs = td;
+
+        node_t *n = node_create(ND_LOCAL_DECL, decl_spec->line, decl_spec->col);
+        n->local_decl.decl_spec = decl_spec;
+        n->local_decl.declarator = declarator;
+        n->local_decl.init = NULL;
+        n->local_decl.sym = NULL;
+        return n;
+    }
+
+    int pointer_level = declarator->direct_decl.pointer_level + decl_spec->decl_spec.pointer_level;
     int array_size = declarator->direct_decl.array_size;
     int elem_size = parser_sym_size(decl_spec, pointer_level);
     int total_size;
@@ -1221,7 +1283,7 @@ static node_t *parser_unary_expression(parser_t *p)
         token_t *p1 = parser_peek(p);
         if (p1 != NULL && p1->type == '(') {
             token_t *p2 = parser_peek2(p);
-            if (p2 != NULL && parser_is_type_token(p2->type)) {
+            if (p2 != NULL && parser_is_type_token(p, p2)) {
                 token_destroy(parser_next(p)); // consume '('
                 node_t *type_node = parser_type_name(p);
                 if (type_node == NULL)
@@ -1257,7 +1319,7 @@ static node_t *parser_cast_expression(parser_t *p)
     token_t *p1 = parser_peek(p);
     if (p1 != NULL && p1->type == '(') {
         token_t *p2 = parser_peek2(p);
-        if (p2 != NULL && parser_is_type_token(p2->type)) {
+        if (p2 != NULL && parser_is_type_token(p, p2)) {
             token_t *lp = parser_next(p); // consume '('
             int line = lp->line, col = lp->col;
             token_destroy(lp);
@@ -2061,9 +2123,10 @@ static bool parser_block_item_list(parser_t *p, node_t *comp)
 {
     while (parser_peek(p)->type != '}') {
         node_t *item;
-        if (parser_is_type_token(parser_peek(p)->type) ||
+        if (parser_is_type_token(p, parser_peek(p)) ||
             parser_peek(p)->type == TOKEN_KW_STATIC ||
-            parser_peek(p)->type == TOKEN_KW_EXTERN)
+            parser_peek(p)->type == TOKEN_KW_EXTERN ||
+            parser_peek(p)->type == TOKEN_KW_TYPEDEF)
             item = parser_local_declaration(p);
         else
             item = parser_statement(p);
@@ -2131,7 +2194,8 @@ static node_t *parser_function_definition(parser_t *p, node_t *decl_spec, node_t
                 node_destroy(declarator);
                 return NULL;
             }
-            int ptr_lvl = pd->param_decl.declarator->direct_decl.pointer_level;
+            int ptr_lvl = pd->param_decl.declarator->direct_decl.pointer_level +
+                          pd->param_decl.decl_spec->decl_spec.pointer_level;
             int arr_sz = pd->param_decl.declarator->direct_decl.array_size;
             // Array parameters decay to pointers per C standard
             if (arr_sz != 0) {
@@ -2229,7 +2293,7 @@ static node_t *parser_declaration_body(parser_t *p, node_t *decl_spec, node_t *d
     n->global_decl.init = init;
     if (declarator != NULL && declarator->direct_decl.param_list == NULL) {
         // Variable declaration (not a forward function declaration)
-        int pointer_level = declarator->direct_decl.pointer_level;
+        int pointer_level = declarator->direct_decl.pointer_level + decl_spec->decl_spec.pointer_level;
         int array_size = declarator->direct_decl.array_size;
         sym_t *sym = scope_define(p->global_scope, declarator->direct_decl.ident.str,
                                   declarator->direct_decl.ident.len, decl_spec, pointer_level,
@@ -2280,6 +2344,29 @@ static node_t *parser_external_declaration(parser_t *p)
     if (declarator == NULL) {
         node_destroy(decl_spec);
         return NULL;
+    }
+
+    // Handle typedef declaration: register the type alias and return a no-op node
+    if (decl_spec->decl_spec.storage_class == SC_TYPEDEF) {
+        if (!parser_expect(p, ';')) {
+            node_destroy(decl_spec);
+            node_destroy(declarator);
+            return NULL;
+        }
+        typedef_def_t *td = malloc(sizeof(typedef_def_t));
+        td->name = declarator->direct_decl.ident.str;
+        td->name_len = declarator->direct_decl.ident.len;
+        td->decl_spec = decl_spec;
+        td->pointer_level = declarator->direct_decl.pointer_level + decl_spec->decl_spec.pointer_level;
+        td->next = p->typedef_defs;
+        p->typedef_defs = td;
+
+        node_t *n = node_create(ND_GLOBAL_DECL, decl_spec->line, decl_spec->col);
+        n->global_decl.decl_spec = decl_spec;
+        n->global_decl.declarator = declarator;
+        n->global_decl.init = NULL;
+        n->global_decl.sym = NULL;
+        return n;
     }
 
     token_t *peek = parser_peek(p);

@@ -7,6 +7,7 @@
 #define SC_NONE 0
 #define SC_STATIC 1
 #define SC_EXTERN 2
+#define SC_TYPEDEF 3
 
 /* Type qualifier flags */
 #define TQ_NONE 0

@@ -756,6 +756,43 @@ static int guscc_test_fail_const_ptr_reassign(void)
     return 0;
 }
 
+/* Typedef storage class */
+static int guscc_test_typedef_int(void) { return compile_and_run("../test/files/typedef_int.c", 42); }
+
+static int guscc_test_typedef_struct(void)
+{
+    return compile_and_run("../test/files/typedef_struct.c", 42);
+}
+
+static int guscc_test_typedef_enum(void) { return compile_and_run("../test/files/typedef_enum.c", 42); }
+
+static int guscc_test_typedef_pointer(void)
+{
+    return compile_and_run("../test/files/typedef_pointer.c", 42);
+}
+
+static int guscc_test_typedef_chain(void)
+{
+    return compile_and_run("../test/files/typedef_chain.c", 42);
+}
+
+static int guscc_test_typedef_local(void)
+{
+    return compile_and_run("../test/files/typedef_local.c", 42);
+}
+
+static int guscc_test_typedef_func_param(void)
+{
+    return compile_and_run("../test/files/typedef_func_param.c", 42);
+}
+
+static int guscc_test_fail_typedef_init(void)
+{
+    int ret = compile_file("../test/files/fail_typedef_init.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -936,4 +973,14 @@ void guscc_test(void)
     ut_run(guscc_test_fail_const_decrement);
     ut_run(guscc_test_fail_const_compound_assign);
     ut_run(guscc_test_fail_const_ptr_reassign);
+
+    /* Typedef storage class */
+    ut_run(guscc_test_typedef_int);
+    ut_run(guscc_test_typedef_struct);
+    ut_run(guscc_test_typedef_enum);
+    ut_run(guscc_test_typedef_pointer);
+    ut_run(guscc_test_typedef_chain);
+    ut_run(guscc_test_typedef_local);
+    ut_run(guscc_test_typedef_func_param);
+    ut_run(guscc_test_fail_typedef_init);
 }

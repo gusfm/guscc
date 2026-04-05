@@ -258,8 +258,9 @@ void ast_print(node_t *n, int indent)
             break;
         case ND_DECL_SPEC:
             printf("Declaration specifiers:%d:%d:%s%s%s\n", n->line, n->col,
-                   n->decl_spec.storage_class == SC_STATIC  ? " static"
+                   n->decl_spec.storage_class == SC_STATIC   ? " static"
                    : n->decl_spec.storage_class == SC_EXTERN ? " extern"
+                   : n->decl_spec.storage_class == SC_TYPEDEF ? " typedef"
                                                               : "",
                    n->decl_spec.type_qualifier & TQ_CONST ? " const" : "", "");
             ast_print(n->decl_spec.type_spec, indent + 1);

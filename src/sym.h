@@ -50,6 +50,15 @@ typedef struct enum_def {
     struct enum_def *next; /* next definition in the registry */
 } enum_def_t;
 
+/* A typedef definition (type alias) */
+typedef struct typedef_def {
+    const char *name; /* points into source buffer — NOT null-terminated */
+    int name_len;
+    node_t *decl_spec;        /* ND_DECL_SPEC describing the aliased type */
+    int pointer_level;        /* pointer level from the declarator */
+    struct typedef_def *next; /* next definition in the registry */
+} typedef_def_t;
+
 /* A single lexical scope (function body, nested block, etc.) */
 typedef struct scope {
     sym_t *syms;          /* head of symbol list (most-recently-defined first) */
@@ -89,5 +98,11 @@ enum_def_t *enum_def_lookup(enum_def_t *list, const char *tag, int tag_len);
 
 /* Free a linked list of enum_def_t nodes. */
 void enum_def_destroy_list(enum_def_t *d);
+
+/* Look up a typedef definition by name. Returns NULL if not found. */
+typedef_def_t *typedef_def_lookup(typedef_def_t *list, const char *name, int name_len);
+
+/* Free a linked list of typedef_def_t nodes (including their decl_spec nodes). */
+void typedef_def_destroy_list(typedef_def_t *d);
 
 #endif /* SYM_H */

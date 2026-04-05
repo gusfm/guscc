@@ -29,6 +29,7 @@ typedef enum {
     TOKEN_KW_STATIC,     // static keyword
     TOKEN_KW_EXTERN,     // extern keyword
     TOKEN_KW_CONST,      // const keyword
+    TOKEN_KW_TYPEDEF,    // typedef keyword
     TOKEN_INC_OP,        // ++
     TOKEN_DEC_OP,        // --
     TOKEN_PTR_OP,        // ->

@@ -984,6 +984,8 @@ static void cg_array_init_list(codegen_t *cg, sym_t *sym, node_t *n)
 static void cg_local_decl(codegen_t *cg, node_t *n)
 {
     sym_t *sym = n->local_decl.sym;
+    if (sym == NULL)
+        return; // typedef — no code to emit
     node_t *init = n->local_decl.init;
 
     // Extern locals: no storage emitted

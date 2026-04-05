@@ -117,3 +117,22 @@ void enum_def_destroy_list(enum_def_t *d)
         d = next;
     }
 }
+
+typedef_def_t *typedef_def_lookup(typedef_def_t *list, const char *name, int name_len)
+{
+    for (typedef_def_t *d = list; d != NULL; d = d->next) {
+        if (d->name_len == name_len && memcmp(d->name, name, (size_t)name_len) == 0)
+            return d;
+    }
+    return NULL;
+}
+
+void typedef_def_destroy_list(typedef_def_t *d)
+{
+    while (d != NULL) {
+        typedef_def_t *next = d->next;
+        /* decl_spec is owned by the AST node (ND_GLOBAL_DECL / ND_LOCAL_DECL), not us */
+        free(d);
+        d = next;
+    }
+}
