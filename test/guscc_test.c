@@ -793,6 +793,39 @@ static int guscc_test_fail_typedef_init(void)
     return 0;
 }
 
+/* Sizeof expression */
+static int guscc_test_sizeof_deref(void) { return compile_and_run("../test/files/sizeof_deref.c", 4); }
+
+static int guscc_test_sizeof_member(void)
+{
+    return compile_and_run("../test/files/sizeof_member.c", 5);
+}
+
+static int guscc_test_sizeof_subscript(void)
+{
+    return compile_and_run("../test/files/sizeof_subscript.c", 24);
+}
+
+static int guscc_test_sizeof_string(void)
+{
+    return compile_and_run("../test/files/sizeof_string.c", 6);
+}
+
+static int guscc_test_sizeof_numeric(void)
+{
+    return compile_and_run("../test/files/sizeof_numeric.c", 4);
+}
+
+static int guscc_test_sizeof_cast(void)
+{
+    return compile_and_run("../test/files/sizeof_cast.c", 11);
+}
+
+static int guscc_test_sizeof_combined(void)
+{
+    return compile_and_run("../test/files/sizeof_combined.c", 31);
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -983,4 +1016,13 @@ void guscc_test(void)
     ut_run(guscc_test_typedef_local);
     ut_run(guscc_test_typedef_func_param);
     ut_run(guscc_test_fail_typedef_init);
+
+    /* Sizeof expression */
+    ut_run(guscc_test_sizeof_deref);
+    ut_run(guscc_test_sizeof_member);
+    ut_run(guscc_test_sizeof_subscript);
+    ut_run(guscc_test_sizeof_string);
+    ut_run(guscc_test_sizeof_numeric);
+    ut_run(guscc_test_sizeof_cast);
+    ut_run(guscc_test_sizeof_combined);
 }

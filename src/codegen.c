@@ -487,10 +487,9 @@ static void cg_cast(codegen_t *cg, node_t *n)
     }
 }
 
-static void cg_sizeof_type(codegen_t *cg, node_t *n)
+static int cg_sizeof_type_size(node_t *ds)
 {
     int size = 4;
-    node_t *ds = n->sizeof_type.type_node;
     if (ds && ds->kind == ND_DECL_SPEC) {
         if (ds->decl_spec.pointer_level > 0) {
             size = 8;
@@ -520,6 +519,48 @@ static void cg_sizeof_type(codegen_t *cg, node_t *n)
             }
         }
     }
+    return size;
+}
+
+static int cg_sizeof_expr_size(node_t *expr)
+{
+    switch (expr->kind) {
+        case ND_IDENT:
+            if (expr->ident.sym) {
+                sym_t *sym = expr->ident.sym;
+                int elem = sym_get_size(sym);
+                return (sym->array_size > 0) ? elem * sym->array_size : elem;
+            }
+            return 4;
+        case ND_UNOP:
+            if (expr->unop.op == '*') {
+                node_t *operand = expr->unop.operand;
+                if (operand->kind == ND_IDENT && operand->ident.sym)
+                    return sym_elem_size(operand->ident.sym);
+            }
+            return 4;
+        case ND_MEMBER:
+            if (expr->member.resolved)
+                return expr->member.resolved->size;
+            return 4;
+        case ND_SUBSCRIPT:
+            if (expr->subscript.array->kind == ND_IDENT && expr->subscript.array->ident.sym)
+                return sym_elem_size(expr->subscript.array->ident.sym);
+            return 4;
+        case ND_STR:
+            return expr->str.val.len - 1; // subtract quotes, add null terminator
+        case ND_NUM:
+            return 4;
+        case ND_CAST:
+            return cg_sizeof_type_size(expr->cast.type_node);
+        default:
+            return 4;
+    }
+}
+
+static void cg_sizeof_type(codegen_t *cg, node_t *n)
+{
+    int size = cg_sizeof_type_size(n->sizeof_type.type_node);
     fprintf(cg->out, "\tmovl\t$%d, %%eax\n", size);
 }
 
@@ -1183,13 +1224,7 @@ static void cg_expr(codegen_t *cg, node_t *n)
             cg_subscript(cg, n);
             break;
         case ND_SIZEOF_EXPR: {
-            int size = 4;
-            node_t *expr = n->sizeof_expr.expr;
-            if (expr->kind == ND_IDENT && expr->ident.sym) {
-                sym_t *sym = expr->ident.sym;
-                int elem = sym_get_size(sym);
-                size = (sym->array_size > 0) ? elem * sym->array_size : elem;
-            }
+            int size = cg_sizeof_expr_size(n->sizeof_expr.expr);
             fprintf(cg->out, "\tmovl\t$%d, %%eax\n", size);
             break;
         }
