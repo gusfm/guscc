@@ -2,7 +2,7 @@
 
 A recursive-descent C compiler written in C99, targeting x86-64 Linux (System V ABI). The goal is eventual self-hosting.
 
-It compiles a subset of C — covering `void`/`char`/`int` scalar types, pointers, 1D arrays, structs, enums, `typedef`, `static`/`extern` storage classes, `const` type qualifier, variadic function declarations (`...`), `sizeof`, pointer arithmetic, and the usual control flow (`if`/`else`, `switch`/`case`/`default`, `while`, `do-while`, `for`, `break`, `continue`, `return`) — directly to a native binary. By default only errors go to stderr; pass `-d` to also dump the source with line numbers, the token stream, and the AST.
+It compiles a subset of C — covering `void`/`char`/`int` scalar types, pointers, 1D arrays, structs, enums, `typedef`, `static`/`extern` storage classes, `const` type qualifier, variadic function declarations (`...`), preprocessor (via `cc -E`), `sizeof`, pointer arithmetic, and the usual control flow (`if`/`else`, `switch`/`case`/`default`, `while`, `do-while`, `for`, `break`, `continue`, `return`) — directly to a native binary. By default only errors go to stderr; pass `-d` to also dump the source with line numbers, the token stream, and the AST.
 
 ## Requirements
 
@@ -34,6 +34,9 @@ The binary is placed at `build/guscc`.
 
 # Compile with debug output (source, tokens, AST printed to stdout)
 ./build/guscc -d test/files/return_literal.c
+
+# Skip preprocessing (for files without #include/#define)
+./build/guscc -no-pp test/files/return_literal.c
 ```
 
 ## Testing

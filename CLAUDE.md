@@ -29,6 +29,9 @@ cmake --build build && cmake --build build --target valgrind
 
 # Compile with debug output (source with line numbers, token stream, AST)
 ./build/guscc -d test/files/return_literal.c
+
+# Skip preprocessing (for files without #include/#define)
+./build/guscc -no-pp test/files/return_literal.c
 ```
 
 Code style is enforced by `.clang-format` (LLVM base, 100-column limit).
@@ -58,6 +61,7 @@ Parameters are assigned negative `%rbp` offsets in declaration order (first para
 - 1D fixed-size local arrays supported with braced initializers (`int a[5] = {1,2,3}`) and string literal initializers (`char s[20] = "hello"`); no multi-dimensional arrays or `sizeof(int[N])` (array in type-name context)
 - Pointer arithmetic supported for local pointer variables: `+`, `-`, `+=`, `-=`, `++`, `--` (prefix and postfix), pointer comparisons, and pointer subtraction yielding element count (ptrdiff); offsets scaled by `sizeof(*p)` automatically; dereference (`*p`) respects pointee size; dereferencing a non-pointer is a compile-time error
 - Pointer arithmetic on pointer-typed function parameters is not yet supported (only local pointer variables)
+- Preprocessor supported via external `cc -E -P`: `#include`, `#define`, `#ifdef`/`#ifndef`/`#endif`, and all standard C preprocessor directives work; preprocessing is on by default; use `-no-pp` to skip; error locations refer to preprocessed line numbers, not original source
 - `sizeof` operator supported: `sizeof(type_name)` for all types (primitives, structs, enums, pointers, typedef names); `sizeof expr` for identifiers, arrays, dereferences (`sizeof *p`), member access (`sizeof s.x`), subscripts (`sizeof a[0]`), string literals, numeric literals, and cast expressions; all sizeof results are compile-time constants; no `sizeof(int[N])` (array in type-name context)
 - Enums supported: named and anonymous definitions, explicit and auto-incrementing values; enumerator constants are visible in the enclosing scope; `enum` type is equivalent to `int` (4 bytes); enumerator initializers must be integer literals (no complex constant expressions)
 - Only named struct definitions; no anonymous structs, no nested struct types, no struct assignment

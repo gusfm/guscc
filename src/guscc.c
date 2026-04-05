@@ -57,6 +57,50 @@ static char *load_file_to_string(const char *filename, long *size)
     return buffer;
 }
 
+static char *preprocess_file(const char *filename, long *size)
+{
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd), "cc -E -P %s", filename);
+    FILE *pp = popen(cmd, "r");
+    if (!pp) {
+        perror("popen");
+        return NULL;
+    }
+
+    size_t capacity = 4096;
+    size_t len = 0;
+    char *buf = malloc(capacity);
+    if (!buf) {
+        perror("malloc");
+        pclose(pp);
+        return NULL;
+    }
+    size_t n;
+    while ((n = fread(buf + len, 1, capacity - len, pp)) > 0) {
+        len += n;
+        if (len == capacity) {
+            capacity *= 2;
+            char *newbuf = realloc(buf, capacity);
+            if (!newbuf) {
+                perror("realloc");
+                free(buf);
+                pclose(pp);
+                return NULL;
+            }
+            buf = newbuf;
+        }
+    }
+    int status = pclose(pp);
+    if (status != 0) {
+        fprintf(stderr, "preprocessor failed with status %d\n", status);
+        free(buf);
+        return NULL;
+    }
+    buf[len] = '\0';
+    *size = (long)len;
+    return buf;
+}
+
 static int lexer(char *buf, int size)
 {
     lex_t lex;
@@ -104,6 +148,7 @@ int guscc(int argc, char **argv)
 {
     int debug = 0;
     int asm_only = 0;
+    int no_pp = 0;
     const char *filename = NULL;
     const char *outname = NULL;
 
@@ -112,6 +157,8 @@ int guscc(int argc, char **argv)
             debug = 1;
         else if (strcmp(argv[i], "-S") == 0)
             asm_only = 1;
+        else if (strcmp(argv[i], "-no-pp") == 0)
+            no_pp = 1;
         else if (strcmp(argv[i], "-o") == 0) {
             if (++i >= argc) {
                 fprintf(stderr, "error: -o requires an argument\n");
@@ -127,12 +174,16 @@ int guscc(int argc, char **argv)
     }
 
     if (filename == NULL) {
-        fprintf(stderr, "error: syntax: guscc [-d] [-S] [-o <output>] <file.c>\n");
+        fprintf(stderr, "error: syntax: guscc [-d] [-S] [-no-pp] [-o <output>] <file.c>\n");
         return -1;
     }
 
     long size;
-    char *buf = load_file_to_string(filename, &size);
+    char *buf;
+    if (no_pp)
+        buf = load_file_to_string(filename, &size);
+    else
+        buf = preprocess_file(filename, &size);
     if (buf == NULL) {
         fprintf(stderr, "error: could not open %s\n", filename);
         return -1;

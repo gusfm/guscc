@@ -826,6 +826,13 @@ static int guscc_test_sizeof_combined(void)
     return compile_and_run("../test/files/sizeof_combined.c", 31);
 }
 
+/* Preprocessor */
+static int guscc_test_pp_define(void) { return compile_and_run("../test/files/pp_define.c", 42); }
+
+static int guscc_test_pp_include(void) { return compile_and_run("../test/files/pp_include.c", 42); }
+
+static int guscc_test_pp_ifdef(void) { return compile_and_run("../test/files/pp_ifdef.c", 42); }
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -1025,4 +1032,9 @@ void guscc_test(void)
     ut_run(guscc_test_sizeof_numeric);
     ut_run(guscc_test_sizeof_cast);
     ut_run(guscc_test_sizeof_combined);
+
+    /* Preprocessor */
+    ut_run(guscc_test_pp_define);
+    ut_run(guscc_test_pp_include);
+    ut_run(guscc_test_pp_ifdef);
 }
