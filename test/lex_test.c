@@ -301,6 +301,17 @@ static int lex_test_8(void)
     return 0;
 }
 
+static int lex_test_9(void)
+{
+    lex_t lex;
+    char src[] = "union unionx";
+    lex_init(&lex, src, sizeof(src));
+    ASSERT(check_next_token(&lex, TOKEN_KW_UNION) == 0);
+    ASSERT(check_next_token_str(&lex, TOKEN_IDENT, "unionx") == 0);
+    ASSERT(lex_next(&lex) == NULL);
+    return 0;
+}
+
 void lex_test(void)
 {
     ut_run(lex_test_1);
@@ -311,4 +322,5 @@ void lex_test(void)
     ut_run(lex_test_6);
     ut_run(lex_test_7);
     ut_run(lex_test_8);
+    ut_run(lex_test_9);
 }

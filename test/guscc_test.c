@@ -833,6 +833,28 @@ static int guscc_test_pp_include(void) { return compile_and_run("../test/files/p
 
 static int guscc_test_pp_ifdef(void) { return compile_and_run("../test/files/pp_ifdef.c", 42); }
 
+/* ---- Union tests ---- */
+
+static int guscc_test_union_basic(void) { return compile_and_run("../test/files/union_basic.c", 42); }
+
+static int guscc_test_union_sizeof(void) { return compile_and_run("../test/files/union_sizeof.c", 4); }
+
+static int guscc_test_union_pointer(void) { return compile_and_run("../test/files/union_pointer.c", 42); }
+
+static int guscc_test_union_mixed_types(void) { return compile_and_run("../test/files/union_mixed_types.c", 8); }
+
+static int guscc_test_union_in_struct(void)
+{
+    return compile_and_run("../test/files/union_in_struct.c", 42);
+}
+
+static int guscc_test_fail_union_no_body(void)
+{
+    int ret = compile_file("../test/files/fail_union_no_body.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -1037,4 +1059,12 @@ void guscc_test(void)
     ut_run(guscc_test_pp_define);
     ut_run(guscc_test_pp_include);
     ut_run(guscc_test_pp_ifdef);
+
+    /* Unions */
+    ut_run(guscc_test_union_basic);
+    ut_run(guscc_test_union_sizeof);
+    ut_run(guscc_test_union_pointer);
+    ut_run(guscc_test_union_mixed_types);
+    ut_run(guscc_test_union_in_struct);
+    ut_run(guscc_test_fail_union_no_body);
 }

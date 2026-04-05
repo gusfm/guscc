@@ -40,6 +40,7 @@ typedef struct struct_def {
     struct_member_t *members; /* linked list of members */
     int size;                 /* total size of the struct (with tail padding) */
     int align;                /* alignment requirement of the struct */
+    int is_union;             /* 0 = struct, 1 = union */
     struct struct_def *next;  /* next definition in the registry */
 } struct_def_t;
 

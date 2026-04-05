@@ -153,9 +153,15 @@ static int parser_align_up(int offset, int align)
  */
 static node_t *parser_struct_or_union_specifier(parser_t *p)
 {
-    token_t *kw = parser_expect_token(p, TOKEN_KW_STRUCT);
-    if (kw == NULL)
+    token_t *kw = parser_peek(p);
+    int is_union = 0;
+    if (kw != NULL && kw->type == TOKEN_KW_UNION)
+        is_union = 1;
+    else if (kw == NULL || kw->type != TOKEN_KW_STRUCT) {
+        fprintf(stderr, "Expected 'struct' or 'union'\n");
         return NULL;
+    }
+    kw = parser_next(p);
     int line = kw->line, col = kw->col;
     token_destroy(kw);
 
@@ -170,12 +176,13 @@ static node_t *parser_struct_or_union_specifier(parser_t *p)
         token_destroy(ident);
     }
 
-    // If '{' follows, parse struct body
+    // If '{' follows, parse struct/union body
     if (parser_accept(p, '{')) {
         struct_member_t *members = NULL;
         struct_member_t **tail = &members;
         int offset = 0;
         int max_align = 1;
+        int max_size = 0; /* for unions: track largest member */
 
         while (!parser_accept(p, '}')) {
             node_t *mem_decl_spec = parser_declaration_specifiers(p);
@@ -200,8 +207,6 @@ static node_t *parser_struct_or_union_specifier(parser_t *p)
             int mem_size = parser_sym_size(mem_decl_spec, ptr_lvl);
             int mem_align = mem_size < 8 ? mem_size : 8;
 
-            // Align offset for this member
-            offset = parser_align_up(offset, mem_align);
             if (mem_align > max_align)
                 max_align = mem_align;
 
@@ -210,18 +215,26 @@ static node_t *parser_struct_or_union_specifier(parser_t *p)
             m->name_len = mem_declarator->direct_decl.ident.len;
             m->decl_spec = mem_decl_spec;
             m->pointer_level = ptr_lvl;
-            m->offset = offset;
             m->size = mem_size;
             m->next = NULL;
             *tail = m;
             tail = &m->next;
 
-            offset += mem_size;
+            if (is_union) {
+                m->offset = 0;
+                if (mem_size > max_size)
+                    max_size = mem_size;
+            } else {
+                offset = parser_align_up(offset, mem_align);
+                m->offset = offset;
+                offset += mem_size;
+            }
             node_destroy(mem_declarator);
         }
 
-        // Total struct size with tail padding
-        int total_size = parser_align_up(offset, max_align);
+        // Total size with tail padding
+        int total_size = is_union ? parser_align_up(max_size, max_align)
+                                  : parser_align_up(offset, max_align);
 
         struct_def_t *def = malloc(sizeof(struct_def_t));
         def->tag = tag;
@@ -229,6 +242,7 @@ static node_t *parser_struct_or_union_specifier(parser_t *p)
         def->members = members;
         def->size = total_size;
         def->align = max_align;
+        def->is_union = is_union;
         def->next = p->struct_defs;
         p->struct_defs = def;
 
@@ -241,13 +255,15 @@ static node_t *parser_struct_or_union_specifier(parser_t *p)
 
     // No body — look up existing definition
     if (tag == NULL) {
-        fprintf(stderr, "%d:%d: error: expected struct tag or body\n", line, col);
+        fprintf(stderr, "%d:%d: error: expected %s tag or body\n", line, col,
+                is_union ? "union" : "struct");
         return NULL;
     }
 
     struct_def_t *def = struct_def_lookup(p->struct_defs, tag, tag_len);
     if (def == NULL) {
-        fprintf(stderr, "%d:%d: error: use of undefined struct '%.*s'\n", line, col, tag_len, tag);
+        fprintf(stderr, "%d:%d: error: use of undefined %s '%.*s'\n", line, col,
+                is_union ? "union" : "struct", tag_len, tag);
         return NULL;
     }
 
@@ -403,7 +419,7 @@ static node_t *parser_enum_specifier(parser_t *p)
 static node_t *parser_type_specifier(parser_t *p)
 {
     token_t *peek = parser_peek(p);
-    if (peek != NULL && peek->type == TOKEN_KW_STRUCT)
+    if (peek != NULL && (peek->type == TOKEN_KW_STRUCT || peek->type == TOKEN_KW_UNION))
         return parser_struct_or_union_specifier(p);
     if (peek != NULL && peek->type == TOKEN_KW_ENUM)
         return parser_enum_specifier(p);
@@ -730,7 +746,7 @@ static bool parser_is_type_token(parser_t *p, token_t *tok)
     token_type_t type = tok->type;
     if (type == TOKEN_KW_INT || type == TOKEN_KW_CHAR || type == TOKEN_KW_VOID ||
         type == TOKEN_KW_SHORT || type == TOKEN_KW_LONG ||
-        type == TOKEN_KW_STRUCT || type == TOKEN_KW_ENUM || type == TOKEN_KW_CONST)
+        type == TOKEN_KW_STRUCT || type == TOKEN_KW_UNION || type == TOKEN_KW_ENUM || type == TOKEN_KW_CONST)
         return true;
     if (type == TOKEN_IDENT && typedef_def_lookup(p->typedef_defs, tok->sval, tok->len))
         return true;
