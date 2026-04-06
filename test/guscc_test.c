@@ -895,6 +895,25 @@ static int guscc_test_struct_assign_init(void)
     return compile_and_run("../test/files/struct_assign_init.c", 42);
 }
 
+static int guscc_test_param_ptr_arith(void) { return compile_and_run("../test/files/param_ptr_arith.c", 42); }
+
+static int guscc_test_param_ptr_inc_dec(void)
+{
+    return compile_and_run("../test/files/param_ptr_inc_dec.c", 42);
+}
+
+static int guscc_test_param_ptr_compound(void)
+{
+    return compile_and_run("../test/files/param_ptr_compound.c", 42);
+}
+
+static int guscc_test_param_ptr_diff(void) { return compile_and_run("../test/files/param_ptr_diff.c", 42); }
+
+static int guscc_test_param_ptr_compare(void)
+{
+    return compile_and_run("../test/files/param_ptr_compare.c", 42);
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -1121,4 +1140,11 @@ void guscc_test(void)
     ut_run(guscc_test_union_assign);
     ut_run(guscc_test_struct_assign_nested);
     ut_run(guscc_test_struct_assign_init);
+
+    /* Pointer parameter arithmetic */
+    ut_run(guscc_test_param_ptr_arith);
+    ut_run(guscc_test_param_ptr_inc_dec);
+    ut_run(guscc_test_param_ptr_compound);
+    ut_run(guscc_test_param_ptr_diff);
+    ut_run(guscc_test_param_ptr_compare);
 }

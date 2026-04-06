@@ -70,7 +70,6 @@ Parameters are assigned negative `%rbp` offsets in declaration order (first para
 ## Current limitations
 
 - Max 6 integer parameters (System V AMD64 ABI register arguments); no floating-point parameters
-- Pointer arithmetic only works on local pointer variables, not pointer-typed parameters
 - 1D arrays only; no multi-dimensional arrays or `sizeof(int[5])` (array in type-name context)
 - Named struct and union definitions supported; nested struct/union member access and struct/union assignment supported; no anonymous structs/unions
 - Forward function calls (callee defined later in the file) produce an "undeclared identifier" warning; forward declarations with unnamed parameters are supported
