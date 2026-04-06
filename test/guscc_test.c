@@ -855,6 +855,32 @@ static int guscc_test_fail_union_no_body(void)
     return 0;
 }
 
+static int guscc_test_nested_struct(void) { return compile_and_run("../test/files/nested_struct.c", 42); }
+
+static int guscc_test_nested_union_access(void)
+{
+    return compile_and_run("../test/files/nested_union_access.c", 42);
+}
+
+static int guscc_test_struct_in_union(void) { return compile_and_run("../test/files/struct_in_union.c", 42); }
+
+static int guscc_test_nested_struct_pointer(void)
+{
+    return compile_and_run("../test/files/nested_struct_pointer.c", 42);
+}
+
+static int guscc_test_nested_struct_sizeof(void)
+{
+    return compile_and_run("../test/files/nested_struct_sizeof.c", 8);
+}
+
+static int guscc_test_fail_nested_member_bad(void)
+{
+    int ret = compile_file("../test/files/fail_nested_member_bad.c");
+    ASSERT(ret != 0);
+    return 0;
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -1067,4 +1093,12 @@ void guscc_test(void)
     ut_run(guscc_test_union_mixed_types);
     ut_run(guscc_test_union_in_struct);
     ut_run(guscc_test_fail_union_no_body);
+
+    /* Nested structs/unions */
+    ut_run(guscc_test_nested_struct);
+    ut_run(guscc_test_nested_union_access);
+    ut_run(guscc_test_struct_in_union);
+    ut_run(guscc_test_nested_struct_pointer);
+    ut_run(guscc_test_nested_struct_sizeof);
+    ut_run(guscc_test_fail_nested_member_bad);
 }

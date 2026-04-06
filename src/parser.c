@@ -1080,22 +1080,33 @@ static node_t *parser_primary_expression(parser_t *p)
 }
 
 /* Try to resolve a struct member access. Sets mem->member.resolved if
- * the object is a simple ND_IDENT with a struct-typed symbol. */
+ * the object is a simple ND_IDENT with a struct-typed symbol, or a
+ * resolved ND_MEMBER (for chained access like a.b.c). */
 static void parser_resolve_member(node_t *mem)
 {
     mem->member.resolved = NULL;
     node_t *obj = mem->member.object;
-    if (obj->kind != ND_IDENT || obj->ident.sym == NULL)
+
+    node_t *ds = NULL;
+    int ptr_level = 0;
+
+    if (obj->kind == ND_IDENT && obj->ident.sym != NULL) {
+        ds = obj->ident.sym->decl_spec;
+        ptr_level = obj->ident.sym->pointer_level;
+    } else if (obj->kind == ND_MEMBER && obj->member.resolved != NULL) {
+        ds = obj->member.resolved->decl_spec;
+        ptr_level = obj->member.resolved->pointer_level;
+    } else {
         return;
-    sym_t *sym = obj->ident.sym;
-    node_t *ds = sym->decl_spec;
+    }
+
     if (ds == NULL || ds->decl_spec.type_spec == NULL)
         return;
 
-    // For '.': sym must be a struct (pointer_level == 0)
-    // For '->': sym must be a pointer to struct (pointer_level > 0)
+    // For '.': object must be a struct (pointer_level == 0)
+    // For '->': object must be a pointer to struct (pointer_level > 0)
     int expected_ptr = mem->member.is_ptr ? 1 : 0;
-    if ((sym->pointer_level > 0) != expected_ptr)
+    if ((ptr_level > 0) != expected_ptr)
         return;
 
     if (ds->decl_spec.type_spec->kind != ND_STRUCT_SPEC)
