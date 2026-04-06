@@ -881,6 +881,20 @@ static int guscc_test_fail_nested_member_bad(void)
     return 0;
 }
 
+static int guscc_test_struct_assign(void) { return compile_and_run("../test/files/struct_assign.c", 42); }
+
+static int guscc_test_union_assign(void) { return compile_and_run("../test/files/union_assign.c", 42); }
+
+static int guscc_test_struct_assign_nested(void)
+{
+    return compile_and_run("../test/files/struct_assign_nested.c", 42);
+}
+
+static int guscc_test_struct_assign_init(void)
+{
+    return compile_and_run("../test/files/struct_assign_init.c", 42);
+}
+
 void guscc_test(void)
 {
     /* Original tests */
@@ -1101,4 +1115,10 @@ void guscc_test(void)
     ut_run(guscc_test_nested_struct_pointer);
     ut_run(guscc_test_nested_struct_sizeof);
     ut_run(guscc_test_fail_nested_member_bad);
+
+    /* Struct/union assignment */
+    ut_run(guscc_test_struct_assign);
+    ut_run(guscc_test_union_assign);
+    ut_run(guscc_test_struct_assign_nested);
+    ut_run(guscc_test_struct_assign_init);
 }

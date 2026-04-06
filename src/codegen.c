@@ -60,6 +60,26 @@ static int sym_get_size(sym_t *sym)
     return 4;
 }
 
+// Return the struct/union byte size if the expression is a non-pointer struct-typed lvalue, 0 otherwise.
+static int cg_struct_lvalue_size(node_t *n)
+{
+    node_t *ds = NULL;
+    int ptr_level = 0;
+    if (n->kind == ND_IDENT && n->ident.sym != NULL) {
+        ds = n->ident.sym->decl_spec;
+        ptr_level = n->ident.sym->pointer_level;
+    } else if (n->kind == ND_MEMBER && n->member.resolved != NULL) {
+        ds = n->member.resolved->decl_spec;
+        ptr_level = n->member.resolved->pointer_level;
+    }
+    if (ptr_level > 0 || ds == NULL || ds->decl_spec.type_spec == NULL)
+        return 0;
+    if (ds->decl_spec.type_spec->kind != ND_STRUCT_SPEC)
+        return 0;
+    struct_def_t *def = ds->decl_spec.type_spec->struct_spec.def;
+    return def ? def->size : 0;
+}
+
 // Return the byte size of one subscript element for a sym.
 // For arrays (pointer_level==0): returns the base element size via sym_get_size.
 // For pointers (pointer_level>0): returns the pointee size (not the pointer size itself).
@@ -749,6 +769,18 @@ static void cg_store_to_lvalue(codegen_t *cg, node_t *lhs)
     }
 }
 
+// Emit a struct/union copy of 'size' bytes from src lvalue to dst lvalue using rep movsb.
+static void cg_struct_copy(codegen_t *cg, node_t *dst, node_t *src, int size)
+{
+    cg_lvalue_addr(cg, src);
+    fprintf(cg->out, "\tpushq\t%%rax\n");
+    cg_lvalue_addr(cg, dst);
+    fprintf(cg->out, "\tmovq\t%%rax, %%rdi\n");
+    fprintf(cg->out, "\tpopq\t%%rsi\n");
+    fprintf(cg->out, "\tmovl\t$%d, %%ecx\n", size);
+    fprintf(cg->out, "\trep movsb\n");
+}
+
 // Compute address of a struct member into %rax
 static void cg_member_addr(codegen_t *cg, node_t *n)
 {
@@ -897,9 +929,14 @@ static void cg_assign(codegen_t *cg, node_t *n)
     int op = n->assign.op;
 
     if (op == '=') {
-        cg_expr(cg, n->assign.rhs);
-        cg_store_to_lvalue(cg, n->assign.lhs);
-        // Value of expression stays in %eax/%rax (correct for assignment)
+        int struct_size = cg_struct_lvalue_size(n->assign.lhs);
+        if (struct_size > 0) {
+            cg_struct_copy(cg, n->assign.lhs, n->assign.rhs, struct_size);
+        } else {
+            cg_expr(cg, n->assign.rhs);
+            cg_store_to_lvalue(cg, n->assign.lhs);
+            // Value of expression stays in %eax/%rax (correct for assignment)
+        }
     } else {
         // Compound assignment: load current lhs, push; eval rhs; pop; arith; store
         if ((op == TOKEN_ADD_ASSIGN || op == TOKEN_SUB_ASSIGN) &&
@@ -1115,6 +1152,21 @@ static void cg_local_decl(codegen_t *cg, node_t *n)
             cg->errors++;
         }
         return;
+    }
+
+    // Struct/union initialization from another struct/union
+    if (sym && sym->pointer_level == 0 && sym->array_size == 0 && sym->decl_spec &&
+        sym->decl_spec->decl_spec.type_spec &&
+        sym->decl_spec->decl_spec.type_spec->kind == ND_STRUCT_SPEC) {
+        struct_def_t *def = sym->decl_spec->decl_spec.type_spec->struct_spec.def;
+        if (def && def->size > 0) {
+            cg_lvalue_addr(cg, init);
+            fprintf(cg->out, "\tmovq\t%%rax, %%rsi\n");
+            fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rdi\n", sym->offset);
+            fprintf(cg->out, "\tmovl\t$%d, %%ecx\n", def->size);
+            fprintf(cg->out, "\trep movsb\n");
+            return;
+        }
     }
 
     // Scalar initialization (existing path)
