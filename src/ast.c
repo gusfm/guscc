@@ -1,6 +1,7 @@
 #include "ast.h"
-#include <stdio.h>
-#include <stdlib.h>
+
+#include "guscc_libc.h"
+
 #include "sym.h"
 
 node_t *node_create(node_kind_t kind, int line, int col)

@@ -1,7 +1,6 @@
 #include "sym.h"
 
-#include <stdlib.h>
-#include <string.h>
+#include "guscc_libc.h"
 
 #include "ast.h"
 
@@ -84,7 +83,8 @@ void struct_member_destroy_list(struct_member_t *m)
 {
     while (m != NULL) {
         struct_member_t *next = m->next;
-        node_destroy(m->decl_spec);
+        if (m->owns_decl_spec)
+            node_destroy(m->decl_spec);
         free(m);
         m = next;
     }

@@ -1,8 +1,5 @@
 #include "token.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-
 token_t *token_create(token_type_t type, char *start, char *end, int line, int col)
 {
     token_t *t = malloc(sizeof(token_t));

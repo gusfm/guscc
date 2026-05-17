@@ -1,8 +1,6 @@
 #include "parser.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "guscc_libc.h"
 
 #include "ast.h"
 #include "sym.h"
@@ -189,6 +187,58 @@ static node_t *parser_struct_or_union_specifier(parser_t *p)
                 struct_member_destroy_list(members);
                 return NULL;
             }
+
+            // Anonymous struct/union member: a declaration with a struct/union
+            // type-specifier followed immediately by ';' (no declarator). Promote
+            // its members directly into the enclosing struct/union.
+            if (parser_peek(p)->type == ';' &&
+                mem_decl_spec->decl_spec.type_spec &&
+                mem_decl_spec->decl_spec.type_spec->kind == ND_STRUCT_SPEC) {
+                struct_def_t *anon = mem_decl_spec->decl_spec.type_spec->struct_spec.def;
+                if (anon == NULL || anon->size == 0) {
+                    fprintf(stderr, "%d:%d: error: anonymous member must have a body\n",
+                            mem_decl_spec->line, mem_decl_spec->col);
+                    node_destroy(mem_decl_spec);
+                    struct_member_destroy_list(members);
+                    return NULL;
+                }
+                token_destroy(parser_next(p)); // consume ';'
+
+                int anon_align = anon->align;
+                int anon_size = anon->size;
+                if (anon_align > max_align)
+                    max_align = anon_align;
+                int anon_offset;
+                if (is_union) {
+                    anon_offset = 0;
+                    if (anon_size > max_size)
+                        max_size = anon_size;
+                } else {
+                    offset = parser_align_up(offset, anon_align);
+                    anon_offset = offset;
+                    offset += anon_size;
+                }
+
+                // Promote each member of the anonymous block. decl_spec is shared
+                // with the anon_def's members (owns_decl_spec=0); anon_def itself
+                // lives in p->struct_defs and is freed exactly once.
+                for (struct_member_t *am = anon->members; am != NULL; am = am->next) {
+                    struct_member_t *pm = malloc(sizeof(struct_member_t));
+                    pm->name = am->name;
+                    pm->name_len = am->name_len;
+                    pm->decl_spec = am->decl_spec;
+                    pm->pointer_level = am->pointer_level;
+                    pm->size = am->size;
+                    pm->offset = anon_offset + am->offset;
+                    pm->owns_decl_spec = 0;
+                    pm->next = NULL;
+                    *tail = pm;
+                    tail = &pm->next;
+                }
+                node_destroy(mem_decl_spec);
+                continue;
+            }
+
             node_t *mem_declarator = parser_declarator(p);
             if (mem_declarator == NULL) {
                 node_destroy(mem_decl_spec);
@@ -215,6 +265,7 @@ static node_t *parser_struct_or_union_specifier(parser_t *p)
             m->decl_spec = mem_decl_spec;
             m->pointer_level = ptr_lvl;
             m->size = mem_size;
+            m->owns_decl_spec = 1;
             m->next = NULL;
             *tail = m;
             tail = &m->next;
@@ -235,15 +286,25 @@ static node_t *parser_struct_or_union_specifier(parser_t *p)
         int total_size = is_union ? parser_align_up(max_size, max_align)
                                   : parser_align_up(offset, max_align);
 
-        struct_def_t *def = malloc(sizeof(struct_def_t));
-        def->tag = tag;
-        def->tag_len = tag_len;
-        def->members = members;
-        def->size = total_size;
-        def->align = max_align;
-        def->is_union = is_union;
-        def->next = p->struct_defs;
-        p->struct_defs = def;
+        // If a forward declaration exists (incomplete, size==0), fill it in;
+        // otherwise create a new definition.
+        struct_def_t *def = tag ? struct_def_lookup(p->struct_defs, tag, tag_len) : NULL;
+        if (def != NULL && def->size == 0) {
+            def->members = members;
+            def->size = total_size;
+            def->align = max_align;
+            def->is_union = is_union;
+        } else {
+            def = malloc(sizeof(struct_def_t));
+            def->tag = tag;
+            def->tag_len = tag_len;
+            def->members = members;
+            def->size = total_size;
+            def->align = max_align;
+            def->is_union = is_union;
+            def->next = p->struct_defs;
+            p->struct_defs = def;
+        }
 
         node_t *node = node_create(ND_STRUCT_SPEC, line, col);
         node->struct_spec.tag.str = tag;
@@ -252,7 +313,7 @@ static node_t *parser_struct_or_union_specifier(parser_t *p)
         return node;
     }
 
-    // No body — look up existing definition
+    // No body — look up existing definition, or create a forward reference
     if (tag == NULL) {
         fprintf(stderr, "%d:%d: error: expected %s tag or body\n", line, col,
                 is_union ? "union" : "struct");
@@ -261,9 +322,17 @@ static node_t *parser_struct_or_union_specifier(parser_t *p)
 
     struct_def_t *def = struct_def_lookup(p->struct_defs, tag, tag_len);
     if (def == NULL) {
-        fprintf(stderr, "%d:%d: error: use of undefined %s '%.*s'\n", line, col,
-                is_union ? "union" : "struct", tag_len, tag);
-        return NULL;
+        // Forward declaration: create an incomplete entry (size=0). The body, if
+        // it appears later in the same TU, fills this entry in place.
+        def = malloc(sizeof(struct_def_t));
+        def->tag = tag;
+        def->tag_len = tag_len;
+        def->members = NULL;
+        def->size = 0;
+        def->align = 1;
+        def->is_union = is_union;
+        def->next = p->struct_defs;
+        p->struct_defs = def;
     }
 
     node_t *node = node_create(ND_STRUCT_SPEC, line, col);
@@ -917,6 +986,18 @@ static node_t *parser_local_declaration(parser_t *p)
     int pointer_level = declarator->direct_decl.pointer_level + decl_spec->decl_spec.pointer_level;
     int array_size = declarator->direct_decl.array_size;
     int elem_size = parser_sym_size(decl_spec, pointer_level);
+    if (pointer_level == 0 && elem_size == 0 && decl_spec->decl_spec.type_spec &&
+        decl_spec->decl_spec.type_spec->kind == ND_STRUCT_SPEC) {
+        // Non-pointer use of an incomplete (forward-declared) struct/union
+        struct_def_t *sdef = decl_spec->decl_spec.type_spec->struct_spec.def;
+        int is_un = sdef ? sdef->is_union : 0;
+        fprintf(stderr, "%d:%d: error: use of undefined %s '%.*s'\n", declarator->line,
+                declarator->col, is_un ? "union" : "struct",
+                sdef ? sdef->tag_len : 0, sdef ? sdef->tag : "");
+        node_destroy(decl_spec);
+        node_destroy(declarator);
+        return NULL;
+    }
     int total_size;
     if (array_size > 0) {
         total_size = elem_size * array_size;
@@ -2029,7 +2110,20 @@ static node_t *parser_iteration_statement(parser_t *p)
         if (!parser_expect(p, '('))
             return NULL;
 
-        node_t *init = parser_expression_statement(p);
+        // C99 allows a declaration in the init clause: for (int i = 0; ...; ...).
+        // The declared variable lives in the enclosing scope (close-enough semantics
+        // for self-hosting; the compiler source doesn't reuse the same name in
+        // sibling for-loops at the same scope).
+        node_t *init;
+        token_t *pk = parser_peek(p);
+        if (pk != NULL &&
+            (parser_is_type_token(p, pk) ||
+             pk->type == TOKEN_KW_STATIC ||
+             pk->type == TOKEN_KW_EXTERN ||
+             pk->type == TOKEN_KW_TYPEDEF))
+            init = parser_local_declaration(p);
+        else
+            init = parser_expression_statement(p);
         if (!init)
             return NULL;
 

@@ -1,7 +1,7 @@
 #ifndef TOKEN_H
 #define TOKEN_H
 
-#include <stddef.h>
+#include "guscc_libc.h"
 
 typedef enum {
     TOKEN_IDENT = 0x100, // identifier

@@ -9,10 +9,7 @@
 // References:
 // - chibicc
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#include "guscc_libc.h"
 
 #include "ast.h"
 #include "codegen.h"
@@ -60,7 +57,7 @@ static char *load_file_to_string(const char *filename, long *size)
 static char *preprocess_file(const char *filename, long *size)
 {
     char cmd[512];
-    snprintf(cmd, sizeof(cmd), "cc -E -P %s", filename);
+    snprintf(cmd, sizeof(cmd), "cc -E -P -D__GUSCC__ %s", filename);
     FILE *pp = popen(cmd, "r");
     if (!pp) {
         perror("popen");
@@ -134,7 +131,8 @@ static int codegen(node_t *ast, const char *outpath)
 
 static void debug_file(char *buf)
 {
-    char *endline, *ptr = buf;
+    char *ptr = buf;
+    char *endline;
     int line = 1;
     while ((endline = strchr(ptr, '\n')) != NULL) {
         printf("%d: ", line);

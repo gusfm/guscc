@@ -1,7 +1,7 @@
 #ifndef CODEGEN_H
 #define CODEGEN_H
 
-#include <stdio.h>
+#include "guscc_libc.h"
 #include "ast.h"
 
 typedef struct {

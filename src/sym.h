@@ -30,6 +30,7 @@ typedef struct struct_member {
     int pointer_level;
     int offset; /* byte offset within the struct */
     int size;   /* byte size of this member */
+    int owns_decl_spec; /* 1 if this member owns decl_spec; 0 if shared (promoted from anonymous union/struct) */
     struct struct_member *next;
 } struct_member_t;
 
