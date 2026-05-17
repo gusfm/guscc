@@ -1009,11 +1009,11 @@ static void cg_array_init_str(codegen_t *cg, sym_t *sym, node_t *n)
                 case '\\': byte_val = '\\'; break;
                 case '"':  byte_val = '"';  break;
                 case '0':  byte_val = '\0'; break;
-                default:   byte_val = (unsigned char)src[i + 1]; break;
+                default:   byte_val = src[i + 1] & 0xFF; break;
             }
             i += 2;
         } else {
-            byte_val = (unsigned char)src[i];
+            byte_val = src[i] & 0xFF;
             i++;
         }
         fprintf(cg->out, "\tmovb\t$%d, %d(%%rbp)\n", byte_val, base + dest);

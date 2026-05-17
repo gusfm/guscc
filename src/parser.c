@@ -1,6 +1,5 @@
 #include "parser.h"
 
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -101,14 +100,14 @@ static token_t *parser_peek2(parser_t *p)
     return p->next_token2;
 }
 
-bool parser_accept(parser_t *p, token_type_t type)
+int parser_accept(parser_t *p, token_type_t type)
 {
     token_t *t = parser_peek(p);
     if (t->type == type) {
         token_destroy(parser_next(p)); // consume and free
-        return true;
+        return 1;
     }
-    return false;
+    return 0;
 }
 
 token_t *parser_expect_token(parser_t *p, token_type_t type)
@@ -125,14 +124,14 @@ token_t *parser_expect_token(parser_t *p, token_type_t type)
     }
 }
 
-bool parser_expect(parser_t *p, token_type_t type)
+int parser_expect(parser_t *p, token_type_t type)
 {
     token_t *t = parser_expect_token(p, type);
     if (t != NULL) {
         token_destroy(t);
-        return true;
+        return 1;
     }
-    return false;
+    return 0;
 }
 
 static int parser_align_up(int offset, int align)
@@ -680,7 +679,7 @@ static node_t *parser_direct_declarator(parser_t *p, decl_mode_t mode)
     // Suffix: optional '(' parameter_list ')' or grouping '(' abstract_declarator ')'
     if (parser_peek(p)->type == '(') {
         token_t *p2 = parser_peek2(p);
-        bool is_grouping = (p2 != NULL && p2->type == '*');
+        int is_grouping = (p2 != NULL && p2->type == '*');
 
         if (is_grouping && mode != DECL_CONCRETE) {
             // Grouping: '(' abstract_declarator ')'
@@ -782,17 +781,17 @@ static node_t *parser_declarator(parser_t *p)
     return parser_declarator_mode(p, DECL_CONCRETE);
 }
 
-static bool parser_is_type_token(parser_t *p, token_t *tok)
+static int parser_is_type_token(parser_t *p, token_t *tok)
 {
     token_type_t type = tok->type;
     if (type == TOKEN_KW_INT || type == TOKEN_KW_CHAR || type == TOKEN_KW_VOID ||
         type == TOKEN_KW_SHORT || type == TOKEN_KW_LONG ||
         type == TOKEN_KW_UNSIGNED || type == TOKEN_KW_SIGNED ||
         type == TOKEN_KW_STRUCT || type == TOKEN_KW_UNION || type == TOKEN_KW_ENUM || type == TOKEN_KW_CONST)
-        return true;
+        return 1;
     if (type == TOKEN_IDENT && typedef_def_lookup(p->typedef_defs, tok->sval, tok->len))
-        return true;
-    return false;
+        return 1;
+    return 0;
 }
 
 /* Return the byte size of a type given its decl_spec and pointer level */
@@ -1793,7 +1792,7 @@ static node_t *parser_conditional_expression(parser_t *p)
     return n;
 }
 
-static bool parser_is_assign_op(token_type_t type)
+static int parser_is_assign_op(token_type_t type)
 {
     return type == '=' || type == TOKEN_MUL_ASSIGN || type == TOKEN_DIV_ASSIGN ||
            type == TOKEN_MOD_ASSIGN || type == TOKEN_ADD_ASSIGN || type == TOKEN_SUB_ASSIGN ||
@@ -2189,7 +2188,7 @@ static node_t *parser_statement(parser_t *p)
     }
 }
 
-static bool parser_block_item_list(parser_t *p, node_t *comp)
+static int parser_block_item_list(parser_t *p, node_t *comp)
 {
     while (parser_peek(p)->type != '}') {
         node_t *item;
@@ -2201,10 +2200,10 @@ static bool parser_block_item_list(parser_t *p, node_t *comp)
         else
             item = parser_statement(p);
         if (item == NULL)
-            return false;
+            return 0;
         comp->comp_stmt.stmts[comp->comp_stmt.nstmts++] = item;
     }
-    return true;
+    return 1;
 }
 
 static node_t *parser_compound_statement(parser_t *p)

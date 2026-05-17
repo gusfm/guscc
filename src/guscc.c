@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200809L
+#define _POSIX_C_SOURCE 200809
 // guscc: a simple recursive C compiler
 // It will support a limited number of features. The minimum necessary for
 // self-hosting.
