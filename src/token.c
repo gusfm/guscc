@@ -75,6 +75,10 @@ void token_print(token_t *t)
         printf("TYPEDEF ");
     } else if (type == TOKEN_KW_UNION) {
         printf("UNION ");
+    } else if (type == TOKEN_KW_UNSIGNED) {
+        printf("UNSIGNED ");
+    } else if (type == TOKEN_KW_SIGNED) {
+        printf("SIGNED ");
     } else if (type == TOKEN_INC_OP) {
         printf("++ ");
     } else if (type == TOKEN_DEC_OP) {
@@ -163,6 +167,10 @@ const char *token_type_to_str(token_type_t type, char *str, size_t len)
         snprintf(str, len, "typedef");
     } else if (type == TOKEN_KW_UNION) {
         snprintf(str, len, "union");
+    } else if (type == TOKEN_KW_UNSIGNED) {
+        snprintf(str, len, "unsigned");
+    } else if (type == TOKEN_KW_SIGNED) {
+        snprintf(str, len, "signed");
     } else if (type == TOKEN_INC_OP) {
         snprintf(str, len, "'++'");
     } else if (type == TOKEN_DEC_OP) {

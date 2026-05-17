@@ -833,6 +833,12 @@ static int guscc_test_literal_hex(void) { return compile_and_run("../test/files/
 
 static int guscc_test_literal_suffix(void) { return compile_and_run("../test/files/literal_suffix.c", 42); }
 
+static int guscc_test_unsigned_basic(void) { return compile_and_run("../test/files/unsigned_basic.c", 42); }
+
+static int guscc_test_unsigned_alone(void) { return compile_and_run("../test/files/unsigned_alone.c", 42); }
+
+static int guscc_test_unsigned_size_t(void) { return compile_and_run("../test/files/unsigned_size_t.c", 42); }
+
 static int guscc_test_pp_define(void) { return compile_and_run("../test/files/pp_define.c", 42); }
 
 static int guscc_test_pp_include(void) { return compile_and_run("../test/files/pp_include.c", 42); }
@@ -1158,4 +1164,9 @@ void guscc_test(void)
     ut_run(guscc_test_literal_char);
     ut_run(guscc_test_literal_hex);
     ut_run(guscc_test_literal_suffix);
+
+    /* unsigned/signed type specifiers (Phase 2 self-hosting) */
+    ut_run(guscc_test_unsigned_basic);
+    ut_run(guscc_test_unsigned_alone);
+    ut_run(guscc_test_unsigned_size_t);
 }

@@ -86,6 +86,10 @@ static token_type_t get_token_type(char *s, int len)
         return TOKEN_KW_TYPEDEF;
     if (len == 5 && strncmp(s, "union", 5) == 0)
         return TOKEN_KW_UNION;
+    if (len == 8 && strncmp(s, "unsigned", 8) == 0)
+        return TOKEN_KW_UNSIGNED;
+    if (len == 6 && strncmp(s, "signed", 6) == 0)
+        return TOKEN_KW_SIGNED;
     return TOKEN_IDENT;
 }
 

@@ -31,6 +31,8 @@ typedef enum {
     TOKEN_KW_CONST,      // const keyword
     TOKEN_KW_TYPEDEF,    // typedef keyword
     TOKEN_KW_UNION,      // union keyword
+    TOKEN_KW_UNSIGNED,   // unsigned keyword
+    TOKEN_KW_SIGNED,     // signed keyword
     TOKEN_INC_OP,        // ++
     TOKEN_DEC_OP,        // --
     TOKEN_PTR_OP,        // ->

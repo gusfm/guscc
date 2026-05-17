@@ -321,6 +321,19 @@ static int lex_test_9(void)
     return 0;
 }
 
+static int lex_test_12(void)
+{
+    lex_t lex;
+    char src[] = "unsigned signed unsignedx signedx";
+    lex_init(&lex, src, sizeof(src));
+    ASSERT(check_next_token(&lex, TOKEN_KW_UNSIGNED) == 0);
+    ASSERT(check_next_token(&lex, TOKEN_KW_SIGNED) == 0);
+    ASSERT(check_next_token_str(&lex, TOKEN_IDENT, "unsignedx") == 0);
+    ASSERT(check_next_token_str(&lex, TOKEN_IDENT, "signedx") == 0);
+    ASSERT(lex_next(&lex) == NULL);
+    return 0;
+}
+
 /* Numeric literals: decimal, hex, integer suffixes — all return TOKEN_NUM with computed ival. */
 static int lex_test_10(void)
 {
@@ -372,4 +385,5 @@ void lex_test(void)
     ut_run(lex_test_9);
     ut_run(lex_test_10);
     ut_run(lex_test_11);
+    ut_run(lex_test_12);
 }

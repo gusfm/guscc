@@ -453,27 +453,45 @@ static node_t *parser_type_specifier(parser_t *p)
         node->type_spec = ND_TYPE_CHAR;
     } else if (tok->type == TOKEN_KW_SHORT) {
         node->type_spec = ND_TYPE_SHORT;
-        // Consume optional trailing 'int': "short int"
-        token_t *next = parser_peek(p);
-        if (next && next->type == TOKEN_KW_INT) {
-            token_t *consumed = parser_next(p);
-            token_destroy(consumed);
+        // Consume optional trailing 'int' and/or interleaved unsigned/signed: "short int",
+        // "unsigned short int", "short unsigned int" (the leading unsigned/signed is consumed
+        // by parser_declaration_specifiers; here we only see trailing ones).
+        int saw_int = 0;
+        for (;;) {
+            token_t *next = parser_peek(p);
+            if (!next)
+                break;
+            if (next->type == TOKEN_KW_INT && !saw_int) {
+                saw_int = 1;
+                token_destroy(parser_next(p));
+            } else if (next->type == TOKEN_KW_UNSIGNED || next->type == TOKEN_KW_SIGNED) {
+                token_destroy(parser_next(p));
+            } else {
+                break;
+            }
         }
     } else if (tok->type == TOKEN_KW_INT) {
         node->type_spec = ND_TYPE_INT;
     } else if (tok->type == TOKEN_KW_LONG) {
         node->type_spec = ND_TYPE_LONG;
-        // Consume optional second 'long': "long long"
-        token_t *next = parser_peek(p);
-        if (next && next->type == TOKEN_KW_LONG) {
-            token_t *consumed = parser_next(p);
-            token_destroy(consumed);
-            next = parser_peek(p);
-        }
-        // Consume optional trailing 'int': "long int" or "long long int"
-        if (next && next->type == TOKEN_KW_INT) {
-            token_t *consumed = parser_next(p);
-            token_destroy(consumed);
+        // Consume optional 'long' (at most once, for "long long"), 'int' (at most once),
+        // and any interleaved unsigned/signed: "long long int", "long unsigned int", etc.
+        int saw_long2 = 0, saw_int = 0;
+        for (;;) {
+            token_t *next = parser_peek(p);
+            if (!next)
+                break;
+            if (next->type == TOKEN_KW_LONG && !saw_long2) {
+                saw_long2 = 1;
+                token_destroy(parser_next(p));
+            } else if (next->type == TOKEN_KW_INT && !saw_int) {
+                saw_int = 1;
+                token_destroy(parser_next(p));
+            } else if (next->type == TOKEN_KW_UNSIGNED || next->type == TOKEN_KW_SIGNED) {
+                token_destroy(parser_next(p));
+            } else {
+                break;
+            }
         }
     } else {
         token_print_error(tok, "type");
@@ -488,7 +506,9 @@ static node_t *parser_declaration_specifiers(parser_t *p)
 {
     int storage_class = SC_NONE;
     int type_qualifier = TQ_NONE;
-    // Consume storage class specifiers and type qualifiers before the type specifier
+    int saw_signedness = 0;
+    int signedness_line = 0, signedness_col = 0;
+    // Consume storage class specifiers, type qualifiers, and unsigned/signed before the type
     for (;;) {
         token_t *peek = parser_peek(p);
         if (peek && (peek->type == TOKEN_KW_STATIC || peek->type == TOKEN_KW_EXTERN ||
@@ -503,19 +523,44 @@ static node_t *parser_declaration_specifiers(parser_t *p)
         } else if (peek && peek->type == TOKEN_KW_CONST) {
             type_qualifier |= TQ_CONST;
             token_destroy(parser_next(p));
+        } else if (peek && (peek->type == TOKEN_KW_UNSIGNED || peek->type == TOKEN_KW_SIGNED)) {
+            // Accept and discard: arithmetic stays signed-everywhere; unsigned char/int/long
+            // are treated as their signed counterparts. Sufficient for self-hosting.
+            saw_signedness = 1;
+            signedness_line = peek->line;
+            signedness_col = peek->col;
+            token_destroy(parser_next(p));
         } else {
             break;
         }
     }
     p->typedef_pointer_level = 0;
-    node_t *type_spec = parser_type_specifier(p);
-    if (type_spec == NULL)
-        return NULL;
+    node_t *type_spec;
+    // If only signedness was seen (no primitive type follows), synthesize "int"
+    token_t *after_sgn = parser_peek(p);
+    int next_is_primitive = after_sgn &&
+        (after_sgn->type == TOKEN_KW_CHAR || after_sgn->type == TOKEN_KW_SHORT ||
+         after_sgn->type == TOKEN_KW_INT || after_sgn->type == TOKEN_KW_LONG);
+    if (saw_signedness && !next_is_primitive) {
+        type_spec = node_create(ND_TYPE_SPEC, signedness_line, signedness_col);
+        type_spec->type_spec = ND_TYPE_INT;
+    } else {
+        type_spec = parser_type_specifier(p);
+        if (type_spec == NULL)
+            return NULL;
+    }
     int typedef_ptrlvl = p->typedef_pointer_level;
-    // Accept trailing const after type specifier (e.g. "int const x")
-    if (parser_peek(p)->type == TOKEN_KW_CONST) {
-        type_qualifier |= TQ_CONST;
-        token_destroy(parser_next(p));
+    // Accept trailing const / signedness after type specifier (e.g. "int const x", "int unsigned")
+    for (;;) {
+        token_t *peek = parser_peek(p);
+        if (peek && peek->type == TOKEN_KW_CONST) {
+            type_qualifier |= TQ_CONST;
+            token_destroy(parser_next(p));
+        } else if (peek && (peek->type == TOKEN_KW_UNSIGNED || peek->type == TOKEN_KW_SIGNED)) {
+            token_destroy(parser_next(p));
+        } else {
+            break;
+        }
     }
     node_t *node = node_create(ND_DECL_SPEC, type_spec->line, type_spec->col);
     node->decl_spec.type_spec = type_spec;
@@ -742,6 +787,7 @@ static bool parser_is_type_token(parser_t *p, token_t *tok)
     token_type_t type = tok->type;
     if (type == TOKEN_KW_INT || type == TOKEN_KW_CHAR || type == TOKEN_KW_VOID ||
         type == TOKEN_KW_SHORT || type == TOKEN_KW_LONG ||
+        type == TOKEN_KW_UNSIGNED || type == TOKEN_KW_SIGNED ||
         type == TOKEN_KW_STRUCT || type == TOKEN_KW_UNION || type == TOKEN_KW_ENUM || type == TOKEN_KW_CONST)
         return true;
     if (type == TOKEN_IDENT && typedef_def_lookup(p->typedef_defs, tok->sval, tok->len))
