@@ -947,14 +947,36 @@ static node_t *parser_initializer(parser_t *p)
     return n;
 }
 
-/* Parse a local variable declaration: decl_spec declarator [= expr] ;
- * Defines the symbol in the current scope and returns ND_LOCAL_DECL. */
-static node_t *parser_local_declaration(parser_t *p)
+/* Clone a decl_spec node (and its nested type_spec) for multi-declarator
+ * declarations like `int a, b;` where each declarator's ND_LOCAL_DECL owns
+ * its own copy. struct_def_t / enum_def_t pointers are shared (registry-owned). */
+static node_t *parser_clone_decl_spec(node_t *orig)
 {
-    node_t *decl_spec = parser_declaration_specifiers(p);
-    if (decl_spec == NULL)
-        return NULL;
+    node_t *c = node_create(ND_DECL_SPEC, orig->line, orig->col);
+    c->decl_spec.pointer_level = orig->decl_spec.pointer_level;
+    c->decl_spec.storage_class = orig->decl_spec.storage_class;
+    c->decl_spec.type_qualifier = orig->decl_spec.type_qualifier;
+    node_t *ts = orig->decl_spec.type_spec;
+    if (ts != NULL) {
+        node_t *tc = node_create(ts->kind, ts->line, ts->col);
+        if (ts->kind == ND_TYPE_SPEC) {
+            tc->type_spec = ts->type_spec;
+        } else if (ts->kind == ND_STRUCT_SPEC) {
+            tc->struct_spec.tag = ts->struct_spec.tag;
+            tc->struct_spec.def = ts->struct_spec.def;
+        } else if (ts->kind == ND_ENUM_SPEC) {
+            tc->enum_spec.tag = ts->enum_spec.tag;
+        }
+        c->decl_spec.type_spec = tc;
+    }
+    return c;
+}
 
+/* Parse one init_declarator given an owned decl_spec. Builds ND_LOCAL_DECL,
+ * defines the symbol in the current scope, and consumes the optional `= init`.
+ * Does NOT consume the terminating ',' or ';'. */
+static node_t *parser_init_declarator_local(parser_t *p, node_t *decl_spec)
+{
     node_t *declarator = parser_declarator(p);
     if (declarator == NULL) {
         node_destroy(decl_spec);
@@ -963,11 +985,6 @@ static node_t *parser_local_declaration(parser_t *p)
 
     // Handle block-scope typedef declaration
     if (decl_spec->decl_spec.storage_class == SC_TYPEDEF) {
-        if (!parser_expect(p, ';')) {
-            node_destroy(decl_spec);
-            node_destroy(declarator);
-            return NULL;
-        }
         typedef_def_t *td = malloc(sizeof(typedef_def_t));
         td->name = declarator->direct_decl.ident.str;
         td->name_len = declarator->direct_decl.ident.len;
@@ -1003,11 +1020,10 @@ static node_t *parser_local_declaration(parser_t *p)
     if (array_size > 0) {
         total_size = elem_size * array_size;
     } else if (array_size == -1) {
-        fprintf(stderr, "%d:%d: error: array size missing in declaration\n", declarator->line,
-                declarator->col);
-        node_destroy(decl_spec);
-        node_destroy(declarator);
-        return NULL;
+        // Unsized array: defer; if initialized by a string literal, parser_init_local_string
+        // below will fill in the size. Otherwise this is still an error and we'll catch it
+        // after parsing the initializer.
+        total_size = 0;
     } else {
         total_size = elem_size;
     }
@@ -1022,15 +1038,14 @@ static node_t *parser_local_declaration(parser_t *p)
     int is_static_local = (decl_spec->decl_spec.storage_class == SC_STATIC);
     int is_extern_local = (decl_spec->decl_spec.storage_class == SC_EXTERN);
     sym_t *sym;
+    int frame_offset_set = 0;
     if (is_extern_local) {
-        // Extern locals: no stack allocation; accessed via %rip-relative using the symbol name
         sym = scope_define(p->scope, declarator->direct_decl.ident.str,
                            declarator->direct_decl.ident.len, decl_spec, pointer_level, array_size,
                            0);
         sym->is_global = 1;
         sym->is_extern = 1;
     } else if (is_static_local) {
-        // Static locals: no stack allocation; use unique asm label, accessed via %rip-relative
         sym = scope_define(p->scope, declarator->direct_decl.ident.str,
                            declarator->direct_decl.ident.len, decl_spec, pointer_level, array_size,
                            0);
@@ -1042,18 +1057,23 @@ static node_t *parser_local_declaration(parser_t *p)
         sym->asm_label = malloc((size_t)label_len + 1);
         memcpy(sym->asm_label, buf, (size_t)label_len + 1);
         sym->asm_label_len = label_len;
+    } else if (array_size == -1) {
+        // Unsized array: postpone offset allocation until we know the size from the initializer
+        sym = scope_define(p->scope, declarator->direct_decl.ident.str,
+                           declarator->direct_decl.ident.len, decl_spec, pointer_level, array_size,
+                           0);
     } else {
         p->frame_offset = parser_align_down(p->frame_offset - total_size, align);
         sym = scope_define(p->scope, declarator->direct_decl.ident.str,
                            declarator->direct_decl.ident.len, decl_spec, pointer_level, array_size,
                            p->frame_offset);
+        frame_offset_set = 1;
     }
 
-    // Propagate const qualifier to symbol
     if ((decl_spec->decl_spec.type_qualifier & TQ_CONST) && pointer_level == 0)
-        sym->is_const = 1; // const scalar/struct/array
+        sym->is_const = 1;
     if (declarator->direct_decl.is_const_qualified && pointer_level > 0)
-        sym->is_const = 1; // const pointer: "int * const p"
+        sym->is_const = 1;
 
     node_t *init = NULL;
     if (parser_accept(p, '=')) {
@@ -1066,7 +1086,6 @@ static node_t *parser_local_declaration(parser_t *p)
             node_destroy(declarator);
             return NULL;
         }
-        // Extern locals cannot have initializers
         if (is_extern_local) {
             fprintf(stderr, "%d:%d: error: 'extern' variable cannot have an initializer\n",
                     init->line, init->col);
@@ -1077,7 +1096,6 @@ static node_t *parser_local_declaration(parser_t *p)
             node_destroy(init);
             return NULL;
         }
-        // Static locals require constant initializers
         if (is_static_local && init->kind != ND_NUM && init->kind != ND_STR &&
             init->kind != ND_INITIALIZER_LIST) {
             fprintf(stderr, "%d:%d: error: initializer for static variable is not a constant\n",
@@ -1090,9 +1108,29 @@ static node_t *parser_local_declaration(parser_t *p)
             node_destroy(init);
             return NULL;
         }
+        // Infer unsized char-array size from a string-literal initializer:
+        //   char foo[] = "literal";   /* size = strlen + 1 */
+        if (array_size == -1 && init->kind == ND_STR &&
+            decl_spec->decl_spec.type_spec &&
+            decl_spec->decl_spec.type_spec->kind == ND_TYPE_SPEC &&
+            decl_spec->decl_spec.type_spec->type_spec == ND_TYPE_CHAR &&
+            pointer_level == 0) {
+            // init->str.val includes the surrounding quotes; subtract 2 and add 1 for NUL.
+            int inferred = init->str.val.len - 2 + 1;
+            sym->array_size = inferred;
+            declarator->direct_decl.array_size = inferred;
+            array_size = inferred;
+            total_size = elem_size * inferred;
+            if (!is_extern_local && !is_static_local && !frame_offset_set) {
+                p->frame_offset = parser_align_down(p->frame_offset - total_size, align);
+                sym->offset = p->frame_offset;
+            }
+        }
     }
 
-    if (!parser_expect(p, ';')) {
+    if (array_size == -1 && !is_extern_local) {
+        fprintf(stderr, "%d:%d: error: array size missing in declaration\n", declarator->line,
+                declarator->col);
         p->scope->syms = sym->next;
         free(sym->asm_label);
         free(sym);
@@ -1107,6 +1145,57 @@ static node_t *parser_local_declaration(parser_t *p)
     n->local_decl.declarator = declarator;
     n->local_decl.init = init;
     n->local_decl.sym = sym;
+    return n;
+}
+
+/* Parse a local declaration with one or more init-declarators:
+ *   decl_spec declarator [= init] (',' declarator [= init])* ';'
+ * Each declarator becomes one ND_LOCAL_DECL pushed into *arr.
+ * Returns 1 on success, 0 on failure. */
+static int parser_local_declaration(parser_t *p, node_t ***arr, int *len, int *cap)
+{
+    node_t *decl_spec = parser_declaration_specifiers(p);
+    if (decl_spec == NULL)
+        return 0;
+    int is_first = 1;
+    while (1) {
+        node_t *ds = is_first ? decl_spec : parser_clone_decl_spec(decl_spec);
+        node_t *n = parser_init_declarator_local(p, ds);
+        if (n == NULL) {
+            // parser_init_declarator_local destroyed ds on its own error path.
+            return 0;
+        }
+        node_vec_push(arr, len, cap, n);
+        is_first = 0;
+        if (parser_accept(p, ','))
+            continue;
+        if (!parser_expect(p, ';'))
+            return 0;
+        return 1;
+    }
+}
+
+/* Single-declarator wrapper for callers that need exactly one node
+ * (notably the for-loop init clause). Errors on multi-declarator. */
+static node_t *parser_local_declaration_single(parser_t *p)
+{
+    node_t **tmp = NULL;
+    int tmp_len = 0, tmp_cap = 0;
+    if (!parser_local_declaration(p, &tmp, &tmp_len, &tmp_cap)) {
+        for (int i = 0; i < tmp_len; i++)
+            node_destroy(tmp[i]);
+        free(tmp);
+        return NULL;
+    }
+    if (tmp_len != 1) {
+        fprintf(stderr, "error: multi-declarator declarations not allowed here\n");
+        for (int i = 0; i < tmp_len; i++)
+            node_destroy(tmp[i]);
+        free(tmp);
+        return NULL;
+    }
+    node_t *n = tmp[0];
+    free(tmp);
     return n;
 }
 
@@ -2120,7 +2209,7 @@ static node_t *parser_iteration_statement(parser_t *p)
              pk->type == TOKEN_KW_STATIC ||
              pk->type == TOKEN_KW_EXTERN ||
              pk->type == TOKEN_KW_TYPEDEF))
-            init = parser_local_declaration(p);
+            init = parser_local_declaration_single(p);
         else
             init = parser_expression_statement(p);
         if (!init)
@@ -2284,18 +2373,21 @@ static node_t *parser_statement(parser_t *p)
 static int parser_block_item_list(parser_t *p, node_t *comp)
 {
     while (parser_peek(p)->type != '}') {
-        node_t *item;
         if (parser_is_type_token(p, parser_peek(p)) ||
             parser_peek(p)->type == TOKEN_KW_STATIC ||
             parser_peek(p)->type == TOKEN_KW_EXTERN ||
-            parser_peek(p)->type == TOKEN_KW_TYPEDEF)
-            item = parser_local_declaration(p);
-        else
-            item = parser_statement(p);
-        if (item == NULL)
-            return 0;
-        node_vec_push(&comp->comp_stmt.stmts, &comp->comp_stmt.nstmts,
-                      &comp->comp_stmt.cap_stmts, item);
+            parser_peek(p)->type == TOKEN_KW_TYPEDEF) {
+            // parser_local_declaration pushes 1+ ND_LOCAL_DECL nodes (multi-declarator).
+            if (!parser_local_declaration(p, &comp->comp_stmt.stmts, &comp->comp_stmt.nstmts,
+                                          &comp->comp_stmt.cap_stmts))
+                return 0;
+        } else {
+            node_t *item = parser_statement(p);
+            if (item == NULL)
+                return 0;
+            node_vec_push(&comp->comp_stmt.stmts, &comp->comp_stmt.nstmts,
+                          &comp->comp_stmt.cap_stmts, item);
+        }
     }
     return 1;
 }

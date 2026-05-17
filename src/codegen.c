@@ -134,6 +134,35 @@ static int cg_expr_elem_size(node_t *n)
             return cg_expr_elem_size(n->assign.lhs);
         case ND_COMMA:
             return cg_expr_elem_size(n->comma.right);
+        case ND_POSTOP:
+            // `lvalue++` has the same type (and pointee size) as `lvalue`.
+            return cg_expr_elem_size(n->postop.operand);
+        case ND_MEMBER:
+            if (n->member.resolved && n->member.resolved->pointer_level > 0) {
+                struct_member_t *m = n->member.resolved;
+                if (m->pointer_level > 1)
+                    return 8;
+                // sizeof(pointee of m): base type size
+                node_t *ts = m->decl_spec ? m->decl_spec->decl_spec.type_spec : NULL;
+                if (ts == NULL)
+                    return 4;
+                if (ts->kind == ND_STRUCT_SPEC) {
+                    struct_def_t *def = ts->struct_spec.def;
+                    return def ? def->size : 4;
+                }
+                if (ts->kind == ND_ENUM_SPEC)
+                    return 4;
+                if (ts->kind == ND_TYPE_SPEC) {
+                    switch (ts->type_spec) {
+                        case ND_TYPE_CHAR: return 1;
+                        case ND_TYPE_SHORT: return 2;
+                        case ND_TYPE_INT: return 4;
+                        case ND_TYPE_LONG: return 8;
+                        case ND_TYPE_VOID: return 1;
+                    }
+                }
+            }
+            return 0;
         default:
             return 0;
     }
@@ -1193,28 +1222,114 @@ static void cg_call(codegen_t *cg, node_t *n)
     // Return value is in %rax/%eax
 }
 
+/* Compute the size of a type-spec decl ignoring pointer_level (i.e. the base
+ * type size). Used to derive sizeof(pointee) for pointer arithmetic on
+ * struct-member / subscript lvalues. */
+static int cg_decl_spec_base_size(node_t *ds)
+{
+    if (ds == NULL || ds->kind != ND_DECL_SPEC || ds->decl_spec.type_spec == NULL)
+        return 4;
+    node_t *ts = ds->decl_spec.type_spec;
+    if (ts->kind == ND_STRUCT_SPEC) {
+        struct_def_t *def = ts->struct_spec.def;
+        return def ? def->size : 4;
+    }
+    if (ts->kind == ND_ENUM_SPEC)
+        return 4;
+    if (ts->kind == ND_TYPE_SPEC) {
+        switch (ts->type_spec) {
+            case ND_TYPE_CHAR:
+                return 1;
+            case ND_TYPE_SHORT:
+                return 2;
+            case ND_TYPE_INT:
+                return 4;
+            case ND_TYPE_LONG:
+                return 8;
+            case ND_TYPE_VOID:
+                return 1;
+        }
+    }
+    return 4;
+}
+
 static void cg_postop(codegen_t *cg, node_t *n)
 {
     node_t *operand = n->postop.operand;
-    if (operand->kind != ND_IDENT || operand->ident.sym == NULL) {
-        fprintf(stderr, "codegen: postfix op on unsupported lvalue\n");
+
+    // Fast path: identifier — same single-op codegen as before.
+    if (operand->kind == ND_IDENT && operand->ident.sym != NULL) {
+        sym_t *sym = operand->ident.sym;
+        int size = sym_get_size(sym);
+        cg_load_sym(cg, sym);
+        int delta = (sym->pointer_level > 0) ? sym_elem_size(sym) : 1;
+        const char *add_op = (size == 8) ? "addq" : (size == 2) ? "addw" : "addl";
+        const char *sub_op = (size == 8) ? "subq" : (size == 2) ? "subw" : "subl";
+        const char *instr = (n->postop.op == TOKEN_INC_OP) ? add_op : sub_op;
+        if (sym->is_global)
+            fprintf(cg->out, "\t%s\t$%d, %.*s(%%rip)\n", instr, delta, sym_asm_name_len(sym),
+                    sym_asm_name(sym));
+        else
+            fprintf(cg->out, "\t%s\t$%d, %d(%%rbp)\n", instr, delta, sym->offset);
         return;
     }
-    sym_t *sym = operand->ident.sym;
-    int size = sym_get_size(sym);
 
-    // Load current value (this is the expression result)
-    cg_load_sym(cg, sym);
+    // General lvalue (ND_MEMBER, ND_SUBSCRIPT, ND_UNOP '*'): compute address
+    // into %rcx, load value into %rax, then increment in place at (%rcx).
+    int size = 4;
+    int delta = 1;
+    if (operand->kind == ND_MEMBER) {
+        if (operand->member.resolved == NULL) {
+            fprintf(stderr, "codegen: postfix on unresolved member\n");
+            cg->errors++;
+            return;
+        }
+        struct_member_t *m = operand->member.resolved;
+        size = m->size;
+        if (m->pointer_level > 0) {
+            if (m->pointer_level > 1)
+                delta = 8; // pointer-to-pointer: pointee is itself a pointer
+            else
+                delta = cg_decl_spec_base_size(m->decl_spec);
+        }
+    } else if (operand->kind == ND_SUBSCRIPT) {
+        // a[i]++: element size from the base
+        if (operand->subscript.array->kind == ND_IDENT &&
+            operand->subscript.array->ident.sym) {
+            size = sym_elem_size(operand->subscript.array->ident.sym);
+        }
+        // delta stays 1 unless the element is itself a pointer (rare); fine for self-host
+    } else if (operand->kind == ND_UNOP && operand->unop.op == '*') {
+        // (*p)++: size = sizeof(*p), pointee size of the operand expression
+        size = cg_expr_elem_size(operand->unop.operand);
+        if (size <= 0)
+            size = 4;
+    } else {
+        fprintf(stderr, "codegen: postfix op on unsupported lvalue kind %d\n", operand->kind);
+        cg->errors++;
+        return;
+    }
 
-    // Increment or decrement the variable in place
-    int delta = (sym->pointer_level > 0) ? sym_elem_size(sym) : 1;
-    const char *add_op = (size == 8) ? "addq" : (size == 2) ? "addw" : "addl";
-    const char *sub_op = (size == 8) ? "subq" : (size == 2) ? "subw" : "subl";
-    const char *instr = (n->postop.op == TOKEN_INC_OP) ? add_op : sub_op;
-    if (sym->is_global)
-        fprintf(cg->out, "\t%s\t$%d, %.*s(%%rip)\n", instr, delta, sym_asm_name_len(sym), sym_asm_name(sym));
+    cg_lvalue_addr(cg, operand);                  // %rax = address
+    fprintf(cg->out, "\tmovq\t%%rax, %%rcx\n");   // %rcx = address (stable)
+    if (size == 8)
+        fprintf(cg->out, "\tmovq\t(%%rcx), %%rax\n");
+    else if (size == 2)
+        fprintf(cg->out, "\tmovswl\t(%%rcx), %%eax\n");
+    else if (size == 1)
+        fprintf(cg->out, "\tmovsbl\t(%%rcx), %%eax\n");
     else
-        fprintf(cg->out, "\t%s\t$%d, %d(%%rbp)\n", instr, delta, sym->offset);
+        fprintf(cg->out, "\tmovl\t(%%rcx), %%eax\n");
+    const char *op_w;
+    if (size == 8)
+        op_w = (n->postop.op == TOKEN_INC_OP) ? "addq" : "subq";
+    else if (size == 2)
+        op_w = (n->postop.op == TOKEN_INC_OP) ? "addw" : "subw";
+    else if (size == 1)
+        op_w = (n->postop.op == TOKEN_INC_OP) ? "addb" : "subb";
+    else
+        op_w = (n->postop.op == TOKEN_INC_OP) ? "addl" : "subl";
+    fprintf(cg->out, "\t%s\t$%d, (%%rcx)\n", op_w, delta);
 }
 
 static void cg_expr(codegen_t *cg, node_t *n)

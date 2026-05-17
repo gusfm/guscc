@@ -847,6 +847,14 @@ static int guscc_test_forward_struct(void) { return compile_and_run("../test/fil
 
 static int guscc_test_many_funcs(void) { return compile_and_run("../test/files/many_funcs.c", 42); }
 
+static int guscc_test_string_escaped_quote(void) { return compile_and_run("../test/files/string_escaped_quote.c", 42); }
+
+static int guscc_test_multi_declarator(void) { return compile_and_run("../test/files/multi_declarator.c", 42); }
+
+static int guscc_test_char_array_unsized(void) { return compile_and_run("../test/files/char_array_unsized.c", 42); }
+
+static int guscc_test_postop_member(void) { return compile_and_run("../test/files/postop_member.c", 42); }
+
 static int guscc_test_pp_define(void) { return compile_and_run("../test/files/pp_define.c", 42); }
 
 static int guscc_test_pp_include(void) { return compile_and_run("../test/files/pp_include.c", 42); }
@@ -1185,4 +1193,10 @@ void guscc_test(void)
 
     /* Dynamic AST vectors past old caps (Phase 3 self-hosting) */
     ut_run(guscc_test_many_funcs);
+
+    /* Phase 4c self-hosting fixes */
+    ut_run(guscc_test_string_escaped_quote);
+    ut_run(guscc_test_multi_declarator);
+    ut_run(guscc_test_char_array_unsized);
+    ut_run(guscc_test_postop_member);
 }

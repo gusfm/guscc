@@ -179,10 +179,13 @@ static token_t *read_string(lex_t *l)
     char *s = l->p - 1;
     while (1) {
         char c = lex_readc(l);
-        if (c != '"') {
+        if (c == '\\') {
+            // Consume the escape body (e.g. \", \\, \n) as one unit
+            lex_readc(l);
             continue;
         }
-        return token_create(TOKEN_STR, s, l->p, tok_line, tok_col);
+        if (c == '"')
+            return token_create(TOKEN_STR, s, l->p, tok_line, tok_col);
     }
 }
 
