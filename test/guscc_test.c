@@ -845,6 +845,8 @@ static int guscc_test_for_init_decl(void) { return compile_and_run("../test/file
 
 static int guscc_test_forward_struct(void) { return compile_and_run("../test/files/forward_struct.c", 42); }
 
+static int guscc_test_many_funcs(void) { return compile_and_run("../test/files/many_funcs.c", 42); }
+
 static int guscc_test_pp_define(void) { return compile_and_run("../test/files/pp_define.c", 42); }
 
 static int guscc_test_pp_include(void) { return compile_and_run("../test/files/pp_include.c", 42); }
@@ -1180,4 +1182,7 @@ void guscc_test(void)
     ut_run(guscc_test_anonymous_union);
     ut_run(guscc_test_for_init_decl);
     ut_run(guscc_test_forward_struct);
+
+    /* Dynamic AST vectors past old caps (Phase 3 self-hosting) */
+    ut_run(guscc_test_many_funcs);
 }

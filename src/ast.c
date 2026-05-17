@@ -13,6 +13,15 @@ node_t *node_create(node_kind_t kind, int line, int col)
     return n;
 }
 
+void node_vec_push(node_t ***arr, int *len, int *cap, node_t *item)
+{
+    if (*len >= *cap) {
+        *cap = *cap == 0 ? 8 : *cap * 2;
+        *arr = realloc(*arr, sizeof(node_t *) * (size_t)(*cap));
+    }
+    (*arr)[(*len)++] = item;
+}
+
 void node_destroy(node_t *node)
 {
     if (node == NULL)
@@ -21,8 +30,10 @@ void node_destroy(node_t *node)
         case ND_TRANSLATION_UNIT:
             for (int i = 0; i < node->translation_unit.nfuncs; i++)
                 node_destroy(node->translation_unit.funcs[i]);
+            free(node->translation_unit.funcs);
             for (int i = 0; i < node->translation_unit.ndecls; i++)
                 node_destroy(node->translation_unit.decls[i]);
+            free(node->translation_unit.decls);
             break;
         case ND_FUNC:
             node_destroy(node->func.decl_spec);
@@ -44,6 +55,7 @@ void node_destroy(node_t *node)
         case ND_PARAM_LIST:
             for (int i = 0; i < node->param_list.nparams; i++)
                 node_destroy(node->param_list.params[i]);
+            free(node->param_list.params);
             break;
         case ND_DIRECT_DECL:
             node_destroy(node->direct_decl.param_list);
@@ -51,6 +63,7 @@ void node_destroy(node_t *node)
         case ND_COMP_STMT:
             for (int i = 0; i < node->comp_stmt.nstmts; i++)
                 node_destroy(node->comp_stmt.stmts[i]);
+            free(node->comp_stmt.stmts);
             break;
         case ND_IF_STMT:
             node_destroy(node->if_stmt.cond);
@@ -106,6 +119,7 @@ void node_destroy(node_t *node)
             node_destroy(node->call.func);
             for (int i = 0; i < node->call.nargs; i++)
                 node_destroy(node->call.args[i]);
+            free(node->call.args);
             break;
         case ND_MEMBER:
             node_destroy(node->member.object);
@@ -150,6 +164,7 @@ void node_destroy(node_t *node)
         case ND_INITIALIZER_LIST:
             for (int i = 0; i < node->initializer_list.count; i++)
                 node_destroy(node->initializer_list.items[i]);
+            free(node->initializer_list.items);
             break;
         case ND_TYPE_SPEC:
         case ND_NUM:

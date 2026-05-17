@@ -74,10 +74,12 @@ struct node {
     union {
         struct {
             int nfuncs;
-            node_t *funcs[64]; // MAX_FUNCS == 64
+            int cap_funcs;
+            node_t **funcs;
             int ndecls;
-            node_t *decls[64]; // MAX_DECLS == 64
-        } translation_unit;    // used when kind == ND_TRANSLATION_UNIT
+            int cap_decls;
+            node_t **decls;
+        } translation_unit; // used when kind == ND_TRANSLATION_UNIT
 
         enum {
             ND_TYPE_VOID,  // void
@@ -117,10 +119,11 @@ struct node {
         } param_decl;           // used when kind == ND_PARAM_DECL
 
         struct {
-            int nparams;       // number of entries in params[]
-            node_t *params[8]; // MAX_PARAM == 8
-            int is_variadic;   // 1 if parameter list ends with '...'
-        } param_list;          // used when kind == ND_PARAM_LIST
+            int nparams;     // number of entries in params[]
+            int cap_params;
+            node_t **params;
+            int is_variadic; // 1 if parameter list ends with '...'
+        } param_list;        // used when kind == ND_PARAM_LIST
 
         struct {
             node_str_t ident;   // function or variable name
@@ -131,9 +134,10 @@ struct node {
         } direct_decl;             // used when kind == ND_DIRECT_DECL
 
         struct {
-            int nstmts;        // number of entries in stmts[]
-            node_t *stmts[64]; // MAX_STMTS == 64
-        } comp_stmt;           // used when kind == ND_COMP_STMT
+            int nstmts; // number of entries in stmts[]
+            int cap_stmts;
+            node_t **stmts;
+        } comp_stmt; // used when kind == ND_COMP_STMT
 
         struct {
             node_t *cond;
@@ -214,8 +218,9 @@ struct node {
         struct {
             node_t *func; // callee expression
             int nargs;
-            node_t *args[8]; // MAX_ARGS == 8
-        } call;              // used when kind == ND_CALL
+            int cap_args;
+            node_t **args;
+        } call; // used when kind == ND_CALL
 
         struct {
             node_t *object;             // struct/pointer expression
@@ -270,13 +275,17 @@ struct node {
 
         struct {
             int count;
-            node_t *items[64]; // max 64 initializer elements
-        } initializer_list;    // used when kind == ND_INITIALIZER_LIST
+            int cap_items;
+            node_t **items;
+        } initializer_list; // used when kind == ND_INITIALIZER_LIST
     };
 };
 
 node_t *node_create(node_kind_t kind, int line, int col);
 void node_destroy(node_t *node);
+
+/* Append `item` to a dynamic node_t pointer array. Grows by doubling (cap starts at 8). */
+void node_vec_push(node_t ***arr, int *len, int *cap, node_t *item);
 
 void ast_print(node_t *n, int indent);
 

@@ -669,10 +669,10 @@ static node_t *parser_parameter_list(parser_t *p)
         return NULL;
 
     node_t *n = node_create(ND_PARAM_LIST, param_decl->line, param_decl->col);
-    n->param_list.params[0] = param_decl;
     n->param_list.is_variadic = 0;
+    node_vec_push(&n->param_list.params, &n->param_list.nparams,
+                  &n->param_list.cap_params, param_decl);
 
-    int nparams = 1;
     while (parser_accept(p, ',')) {
         if (parser_peek(p)->type == TOKEN_ELLIPSIS) {
             token_t *tok = parser_next(p);
@@ -683,9 +683,9 @@ static node_t *parser_parameter_list(parser_t *p)
         param_decl = parser_parameter_declaration(p);
         if (param_decl == NULL)
             return NULL;
-        n->param_list.params[nparams++] = param_decl;
+        node_vec_push(&n->param_list.params, &n->param_list.nparams,
+                      &n->param_list.cap_params, param_decl);
     }
-    n->param_list.nparams = nparams;
     return n;
 }
 
@@ -931,7 +931,8 @@ static node_t *parser_initializer(parser_t *p)
                 node_destroy(n);
                 return NULL;
             }
-            n->initializer_list.items[n->initializer_list.count++] = item;
+            node_vec_push(&n->initializer_list.items, &n->initializer_list.count,
+                          &n->initializer_list.cap_items, item);
             if (!parser_accept(p, ','))
                 break;
             if (parser_peek(p)->type == '}')
@@ -1288,7 +1289,6 @@ static node_t *parser_postfix_expression(parser_t *p)
             token_destroy(op_tok);
             node_t *call = node_create(ND_CALL, line, col);
             call->call.func = node;
-            call->call.nargs = 0;
             if (!parser_accept(p, ')')) {
                 // Parse argument list
                 node_t *arg = parser_assignment_expression(p);
@@ -1296,15 +1296,14 @@ static node_t *parser_postfix_expression(parser_t *p)
                     node_destroy(call);
                     return NULL;
                 }
-                call->call.args[call->call.nargs++] = arg;
+                node_vec_push(&call->call.args, &call->call.nargs, &call->call.cap_args, arg);
                 while (parser_accept(p, ',')) {
                     arg = parser_assignment_expression(p);
                     if (arg == NULL) {
                         node_destroy(call);
                         return NULL;
                     }
-                    if (call->call.nargs < 8)
-                        call->call.args[call->call.nargs++] = arg;
+                    node_vec_push(&call->call.args, &call->call.nargs, &call->call.cap_args, arg);
                 }
                 if (!parser_expect(p, ')')) {
                     node_destroy(call);
@@ -2295,7 +2294,8 @@ static int parser_block_item_list(parser_t *p, node_t *comp)
             item = parser_statement(p);
         if (item == NULL)
             return 0;
-        comp->comp_stmt.stmts[comp->comp_stmt.nstmts++] = item;
+        node_vec_push(&comp->comp_stmt.stmts, &comp->comp_stmt.nstmts,
+                      &comp->comp_stmt.cap_stmts, item);
     }
     return 1;
 }
@@ -2555,9 +2555,11 @@ static node_t *parser_translation_unit(parser_t *p)
             return NULL;
         }
         if (item->kind == ND_FUNC)
-            tu->translation_unit.funcs[tu->translation_unit.nfuncs++] = item;
+            node_vec_push(&tu->translation_unit.funcs, &tu->translation_unit.nfuncs,
+                          &tu->translation_unit.cap_funcs, item);
         else
-            tu->translation_unit.decls[tu->translation_unit.ndecls++] = item;
+            node_vec_push(&tu->translation_unit.decls, &tu->translation_unit.ndecls,
+                          &tu->translation_unit.cap_decls, item);
     }
     if (tu->translation_unit.nfuncs == 0 && tu->translation_unit.ndecls == 0) {
         node_destroy(tu);
