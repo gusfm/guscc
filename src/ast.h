@@ -190,8 +190,9 @@ struct node {
         } ident;             // used when kind == ND_IDENT
 
         struct {
-            node_str_t val; // string value including quotes (not null-terminated)
-        } str;              // used when kind == ND_STR
+            node_str_t val;   // string value including quotes (not null-terminated)
+            int owns_str;     // 1 if val.str was malloc'd (e.g. for adjacent-string concat); 0 if points into source buffer
+        } str;                // used when kind == ND_STR
 
         struct {
             int op; // token type of the operator

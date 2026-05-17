@@ -21,6 +21,9 @@ extern FILE *stderr;
 
 #define NULL ((void *)0)
 #define EOF (-1)
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
 
 /* stdio.h */
 int printf(const char *fmt, ...);

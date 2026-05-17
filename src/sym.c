@@ -45,6 +45,7 @@ sym_t *scope_define(scope_t *scope, const char *name, int name_len, node_t *decl
     s->asm_label_len = 0;
     s->is_enum_const = 0;
     s->enum_val = 0;
+    s->is_function = 0;
     s->next = scope->syms;
     scope->syms = s;
     return s;

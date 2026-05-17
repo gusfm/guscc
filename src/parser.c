@@ -1274,7 +1274,34 @@ static node_t *parser_primary_expression(parser_t *p)
         node_t *n = node_create(ND_STR, tok->line, tok->col);
         n->str.val.str = tok->sval;
         n->str.val.len = tok->len;
+        n->str.owns_str = 0;
         token_destroy(tok);
+        // Translation phase 6: fuse adjacent string-literal tokens. cpp's `-E -P`
+        // doesn't merge them; we splice their inner content here.
+        if (parser_peek(p) != NULL && parser_peek(p)->type == TOKEN_STR) {
+            // Allocate a buffer big enough for the first token plus a generous slack.
+            int cap = n->str.val.len + 64;
+            char *buf = malloc((size_t)cap);
+            memcpy(buf, n->str.val.str, (size_t)n->str.val.len);
+            int total = n->str.val.len; // includes leading and trailing quotes
+            while (parser_peek(p) != NULL && parser_peek(p)->type == TOKEN_STR) {
+                token_t *next_tok = parser_next(p);
+                int inner = next_tok->len - 2; // strip leading and trailing quotes
+                if (total - 1 + inner + 1 > cap) {
+                    while (total - 1 + inner + 1 > cap)
+                        cap *= 2;
+                    buf = realloc(buf, (size_t)cap);
+                }
+                // Overwrite the trailing quote, append the inner content, then re-emit the quote.
+                memcpy(buf + total - 1, next_tok->sval + 1, (size_t)inner);
+                buf[total - 1 + inner] = '"';
+                total = total - 1 + inner + 1;
+                token_destroy(next_tok);
+            }
+            n->str.val.str = buf;
+            n->str.val.len = total;
+            n->str.owns_str = 1;
+        }
         return n;
     }
     if (tok->type == '(') {
@@ -1309,6 +1336,27 @@ static void parser_resolve_member(node_t *mem)
     } else if (obj->kind == ND_MEMBER && obj->member.resolved != NULL) {
         ds = obj->member.resolved->decl_spec;
         ptr_level = obj->member.resolved->pointer_level;
+    } else if (obj->kind == ND_CALL && obj->call.func->kind == ND_IDENT &&
+               obj->call.func->ident.sym != NULL && obj->call.func->ident.sym->is_function) {
+        // Call expression: use the called function's return type (recorded in func_scope).
+        ds = obj->call.func->ident.sym->decl_spec;
+        ptr_level = obj->call.func->ident.sym->pointer_level;
+    } else if (obj->kind == ND_SUBSCRIPT && obj->subscript.array->kind == ND_IDENT &&
+               obj->subscript.array->ident.sym != NULL) {
+        // Subscript: arr[i] yields the array's element type (or one less pointer
+        // level if `arr` is a pure pointer).
+        sym_t *s = obj->subscript.array->ident.sym;
+        ds = s->decl_spec;
+        ptr_level = (s->array_size > 0) ? s->pointer_level : s->pointer_level - 1;
+    } else if (obj->kind == ND_UNOP && obj->unop.op == '*') {
+        // (*p).field: strip one pointer level from the pointer expression's type.
+        node_t *inner = obj->unop.operand;
+        if (inner->kind == ND_IDENT && inner->ident.sym != NULL) {
+            ds = inner->ident.sym->decl_spec;
+            ptr_level = inner->ident.sym->pointer_level - 1;
+        } else {
+            return;
+        }
     } else {
         return;
     }
@@ -2497,10 +2545,12 @@ static node_t *parser_function_definition(parser_t *p, node_t *decl_spec, node_t
     node->func.params_sym_list = params_sym_list;
 
     // Register the function name in the global function scope so that calls
-    // to this function after its definition resolve without a warning.
+    // to this function after its definition resolve without a warning. The sym's
+    // decl_spec/pointer_level describe the function's RETURN type.
     node_str_t fname = declarator->direct_decl.ident;
-    scope_define(p->func_scope, fname.str, fname.len, decl_spec,
-                 declarator->direct_decl.pointer_level, 0, 0);
+    sym_t *fsym = scope_define(p->func_scope, fname.str, fname.len, decl_spec,
+                               declarator->direct_decl.pointer_level, 0, 0);
+    fsym->is_function = 1;
 
     return node;
 }
@@ -2563,6 +2613,16 @@ static node_t *parser_declaration_body(parser_t *p, node_t *decl_spec, node_t *d
         if (declarator->direct_decl.is_const_qualified && pointer_level > 0)
             sym->is_const = 1;
         n->global_decl.sym = sym;
+    } else if (declarator != NULL && declarator->direct_decl.param_list != NULL) {
+        // Forward function declaration: register in func_scope so calls resolve and
+        // their return type can be looked up (for member access on call results).
+        node_str_t fname = declarator->direct_decl.ident;
+        if (fname.str != NULL && scope_lookup(p->func_scope, fname.str, fname.len) == NULL) {
+            sym_t *fsym = scope_define(p->func_scope, fname.str, fname.len, decl_spec,
+                                       declarator->direct_decl.pointer_level, 0, 0);
+            fsym->is_function = 1;
+        }
+        n->global_decl.sym = NULL;
     } else {
         n->global_decl.sym = NULL;
     }

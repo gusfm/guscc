@@ -855,6 +855,12 @@ static int guscc_test_char_array_unsized(void) { return compile_and_run("../test
 
 static int guscc_test_postop_member(void) { return compile_and_run("../test/files/postop_member.c", 42); }
 
+static int guscc_test_adjacent_strings(void) { return compile_and_run("../test/files/adjacent_strings.c", 42); }
+
+static int guscc_test_global_strptr_array(void) { return compile_and_run("../test/files/global_strptr_array.c", 42); }
+
+static int guscc_test_call_result_member(void) { return compile_and_run("../test/files/call_result_member.c", 42); }
+
 static int guscc_test_pp_define(void) { return compile_and_run("../test/files/pp_define.c", 42); }
 
 static int guscc_test_pp_include(void) { return compile_and_run("../test/files/pp_include.c", 42); }
@@ -1199,4 +1205,9 @@ void guscc_test(void)
     ut_run(guscc_test_multi_declarator);
     ut_run(guscc_test_char_array_unsized);
     ut_run(guscc_test_postop_member);
+
+    /* Phase 4d self-hosting fixes */
+    ut_run(guscc_test_adjacent_strings);
+    ut_run(guscc_test_global_strptr_array);
+    ut_run(guscc_test_call_result_member);
 }

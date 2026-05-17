@@ -83,29 +83,31 @@ static int cg_struct_lvalue_size(node_t *n)
 // For pointers (pointer_level>0): returns the pointee size (not the pointer size itself).
 static int sym_elem_size(sym_t *sym)
 {
-    if (sym->pointer_level > 1)
-        return 8; // pointer-to-pointer: element is a pointer (8 bytes)
-    if (sym->pointer_level == 1) {
-        // pointer to base type: element size is the base type size
-        if (sym->decl_spec == NULL || sym->decl_spec->decl_spec.type_spec == NULL)
-            return 4;
-        node_t *ts = sym->decl_spec->decl_spec.type_spec;
-        if (ts->kind == ND_STRUCT_SPEC) {
-            struct_def_t *def = ts->struct_spec.def;
-            return def ? def->size : 4;
-        }
-        if (ts->kind == ND_ENUM_SPEC)
-            return 4;
-        switch (ts->type_spec) {
-            case ND_TYPE_CHAR:  return 1;
-            case ND_TYPE_SHORT: return 2;
-            case ND_TYPE_INT:   return 4;
-            case ND_TYPE_LONG:  return 8;
-            default:            return 1;
-        }
+    // Size of one element reachable by `arr[i]` or `*ptr`. Cases:
+    //   T arr[N]       -> sizeof(T)
+    //   T *arr[N]      -> 8 (element is a pointer)
+    //   T *p           -> sizeof(T)
+    //   T **p          -> 8 (pointee is a pointer)
+    if (sym->array_size > 0 && sym->pointer_level >= 1)
+        return 8; // array of pointers: element is a pointer
+    if (sym->array_size == 0 && sym->pointer_level > 1)
+        return 8; // pointer to pointer
+    if (sym->decl_spec == NULL || sym->decl_spec->decl_spec.type_spec == NULL)
+        return 4;
+    node_t *ts = sym->decl_spec->decl_spec.type_spec;
+    if (ts->kind == ND_STRUCT_SPEC) {
+        struct_def_t *def = ts->struct_spec.def;
+        return def ? def->size : 4;
     }
-    // array (pointer_level==0): sym_get_size gives the element size
-    return sym_get_size(sym);
+    if (ts->kind == ND_ENUM_SPEC)
+        return 4;
+    switch (ts->type_spec) {
+        case ND_TYPE_CHAR:  return 1;
+        case ND_TYPE_SHORT: return 2;
+        case ND_TYPE_INT:   return 4;
+        case ND_TYPE_LONG:  return 8;
+        default:            return 1;
+    }
 }
 
 // Return pointee element size if the expression evaluates to a pointer, else 0.
@@ -1767,31 +1769,59 @@ static void cg_global_decl(codegen_t *cg, node_t *n)
         if (total > used)
             fprintf(cg->out, "\t.zero\t%d\n", total - used);
     } else if (sym->array_size > 0 && init->kind == ND_INITIALIZER_LIST) {
-        // Array with initializer list: e.g. int arr[5] = {1,2,3,4,5}
+        // Array with initializer list. Elements may be ND_NUM (any size) or
+        // ND_STR (for `char *arr[] = {"a", "b", ...}` — emit .LCxx labels and
+        // .quad-reference them; the string bodies are emitted in .rodata after
+        // the array data).
         int count = init->initializer_list.count;
         if (count > sym->array_size)
             count = sym->array_size;
+        int *str_ids = malloc(sizeof(int) * (size_t)count);
+        int has_strings = 0;
         for (int i = 0; i < count; i++) {
             node_t *elem = init->initializer_list.items[i];
-            if (elem->kind != ND_NUM) {
+            if (elem->kind == ND_STR) {
+                str_ids[i] = cg->str_count++;
+                has_strings = 1;
+            } else {
+                str_ids[i] = -1;
+            }
+        }
+        for (int i = 0; i < count; i++) {
+            node_t *elem = init->initializer_list.items[i];
+            if (elem->kind == ND_NUM) {
+                long val = cg_node_int_val(elem);
+                if (size == 8)
+                    fprintf(cg->out, "\t.quad\t%ld\n", val);
+                else if (size == 2)
+                    fprintf(cg->out, "\t.short\t%ld\n", val);
+                else if (size == 1)
+                    fprintf(cg->out, "\t.byte\t%ld\n", val);
+                else
+                    fprintf(cg->out, "\t.long\t%ld\n", val);
+            } else if (elem->kind == ND_STR && size == 8) {
+                fprintf(cg->out, "\t.quad\t.LC%d\n", str_ids[i]);
+            } else {
                 fprintf(stderr, "%d:%d: error: global array initializer must be a constant\n",
                         elem->line, elem->col);
                 cg->errors++;
                 continue;
             }
-            long val = cg_node_int_val(elem);
-            if (size == 8)
-                fprintf(cg->out, "\t.quad\t%ld\n", val);
-            else if (size == 2)
-                fprintf(cg->out, "\t.short\t%ld\n", val);
-            else if (size == 1)
-                fprintf(cg->out, "\t.byte\t%ld\n", val);
-            else
-                fprintf(cg->out, "\t.long\t%ld\n", val);
         }
         int remaining = (sym->array_size - count) * size;
         if (remaining > 0)
             fprintf(cg->out, "\t.zero\t%d\n", remaining);
+        if (has_strings) {
+            fprintf(cg->out, "\t.section\t.rodata\n");
+            for (int i = 0; i < count; i++) {
+                if (str_ids[i] >= 0) {
+                    node_t *elem = init->initializer_list.items[i];
+                    fprintf(cg->out, ".LC%d:\n", str_ids[i]);
+                    fprintf(cg->out, "\t.string\t%.*s\n", elem->str.val.len, elem->str.val.str);
+                }
+            }
+        }
+        free(str_ids);
     } else if (init->kind == ND_NUM) {
         // Scalar integer: e.g. int x = 42
         long val = cg_node_int_val(init);

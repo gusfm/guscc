@@ -166,10 +166,13 @@ void node_destroy(node_t *node)
                 node_destroy(node->initializer_list.items[i]);
             free(node->initializer_list.items);
             break;
+        case ND_STR:
+            if (node->str.owns_str)
+                free(node->str.val.str);
+            break;
         case ND_TYPE_SPEC:
         case ND_NUM:
         case ND_IDENT:
-        case ND_STR:
             break;
     }
     free(node);

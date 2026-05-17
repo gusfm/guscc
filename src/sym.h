@@ -19,6 +19,7 @@ typedef struct sym {
     int asm_label_len;
     int is_enum_const; /* 1 = enum constant (not a variable) */
     int enum_val;      /* value of enum constant (only valid if is_enum_const) */
+    int is_function;   /* 1 = function symbol; decl_spec/pointer_level describe the RETURN type */
     struct sym *next;  /* next symbol in the same scope */
 } sym_t;
 
