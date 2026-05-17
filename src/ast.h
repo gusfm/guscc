@@ -177,6 +177,7 @@ struct node {
 
         struct {
             node_str_t val; // raw token string (not null-terminated)
+            long ival;      // integer value (decimal/hex/char-literal); preferred over val
         } num;              // used when kind == ND_NUM
 
         struct {

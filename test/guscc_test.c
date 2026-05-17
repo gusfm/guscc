@@ -827,6 +827,12 @@ static int guscc_test_sizeof_combined(void)
 }
 
 /* Preprocessor */
+static int guscc_test_literal_char(void) { return compile_and_run("../test/files/literal_char.c", 42); }
+
+static int guscc_test_literal_hex(void) { return compile_and_run("../test/files/literal_hex.c", 42); }
+
+static int guscc_test_literal_suffix(void) { return compile_and_run("../test/files/literal_suffix.c", 42); }
+
 static int guscc_test_pp_define(void) { return compile_and_run("../test/files/pp_define.c", 42); }
 
 static int guscc_test_pp_include(void) { return compile_and_run("../test/files/pp_include.c", 42); }
@@ -1147,4 +1153,9 @@ void guscc_test(void)
     ut_run(guscc_test_param_ptr_compound);
     ut_run(guscc_test_param_ptr_diff);
     ut_run(guscc_test_param_ptr_compare);
+
+    /* Char literals, hex literals, integer suffixes (Phase 1 self-hosting) */
+    ut_run(guscc_test_literal_char);
+    ut_run(guscc_test_literal_hex);
+    ut_run(guscc_test_literal_suffix);
 }

@@ -20,6 +20,15 @@ static int check_next_token_str(lex_t *l, token_type_t type, const char *s)
     return 0;
 }
 
+static int check_next_num_ival(lex_t *l, long expected)
+{
+    token_t *t = lex_next(l);
+    ASSERT(t->type == TOKEN_NUM);
+    ASSERT(t->ival == expected);
+    token_destroy(t);
+    return 0;
+}
+
 static int lex_test_1(void)
 {
     lex_t lex;
@@ -312,6 +321,44 @@ static int lex_test_9(void)
     return 0;
 }
 
+/* Numeric literals: decimal, hex, integer suffixes — all return TOKEN_NUM with computed ival. */
+static int lex_test_10(void)
+{
+    lex_t lex;
+    char src[] = "42 0x100 0xFF 0xff 200809L 1ULL 0";
+    lex_init(&lex, src, sizeof(src));
+    ASSERT(check_next_num_ival(&lex, 42) == 0);
+    ASSERT(check_next_num_ival(&lex, 0x100) == 0);
+    ASSERT(check_next_num_ival(&lex, 0xFF) == 0);
+    ASSERT(check_next_num_ival(&lex, 0xff) == 0);
+    ASSERT(check_next_num_ival(&lex, 200809) == 0);
+    ASSERT(check_next_num_ival(&lex, 1) == 0);
+    ASSERT(check_next_num_ival(&lex, 0) == 0);
+    ASSERT(lex_next(&lex) == NULL);
+    return 0;
+}
+
+/* Character literals: plain char, escape sequences. Each emits TOKEN_NUM with codepoint as ival. */
+static int lex_test_11(void)
+{
+    lex_t lex;
+    char src[] = "'a' 'A' '0' ' ' '\\n' '\\t' '\\r' '\\\\' '\\'' '\\\"' '\\0'";
+    lex_init(&lex, src, sizeof(src));
+    ASSERT(check_next_num_ival(&lex, 'a') == 0);
+    ASSERT(check_next_num_ival(&lex, 'A') == 0);
+    ASSERT(check_next_num_ival(&lex, '0') == 0);
+    ASSERT(check_next_num_ival(&lex, ' ') == 0);
+    ASSERT(check_next_num_ival(&lex, '\n') == 0);
+    ASSERT(check_next_num_ival(&lex, '\t') == 0);
+    ASSERT(check_next_num_ival(&lex, '\r') == 0);
+    ASSERT(check_next_num_ival(&lex, '\\') == 0);
+    ASSERT(check_next_num_ival(&lex, '\'') == 0);
+    ASSERT(check_next_num_ival(&lex, '"') == 0);
+    ASSERT(check_next_num_ival(&lex, '\0') == 0);
+    ASSERT(lex_next(&lex) == NULL);
+    return 0;
+}
+
 void lex_test(void)
 {
     ut_run(lex_test_1);
@@ -323,4 +370,6 @@ void lex_test(void)
     ut_run(lex_test_7);
     ut_run(lex_test_8);
     ut_run(lex_test_9);
+    ut_run(lex_test_10);
+    ut_run(lex_test_11);
 }

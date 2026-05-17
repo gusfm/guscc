@@ -623,11 +623,7 @@ static node_t *parser_direct_declarator(parser_t *p, decl_mode_t mode)
                 node_destroy(n);
                 return NULL;
             }
-            char tmp[32];
-            int len = size_expr->num.val.len < 31 ? size_expr->num.val.len : 31;
-            memcpy(tmp, size_expr->num.val.str, (size_t)len);
-            tmp[len] = '\0';
-            n->direct_decl.array_size = (int)strtol(tmp, NULL, 10);
+            n->direct_decl.array_size = (int)size_expr->num.ival;
             node_destroy(size_expr);
             if (!parser_expect(p, ']')) {
                 node_destroy(n);
@@ -1053,6 +1049,7 @@ static node_t *parser_primary_expression(parser_t *p)
         node_t *n = node_create(ND_NUM, tok->line, tok->col);
         n->num.val.str = tok->sval;
         n->num.val.len = tok->len;
+        n->num.ival = tok->ival;
         token_destroy(tok);
         return n;
     }

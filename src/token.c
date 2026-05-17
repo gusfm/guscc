@@ -9,6 +9,7 @@ token_t *token_create(token_type_t type, char *start, char *end, int line, int c
     t->type = type;
     t->sval = start;
     t->len = end - start;
+    t->ival = 0;
     t->line = line;
     t->col = col;
     return t;

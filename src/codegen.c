@@ -165,21 +165,12 @@ void codegen_finish(codegen_t *cg)
 
 static long cg_node_int_val(node_t *n)
 {
-    char tmp[64];
-    int len = n->num.val.len < 63 ? n->num.val.len : 63;
-    memcpy(tmp, n->num.val.str, len);
-    tmp[len] = '\0';
-    return strtol(tmp, NULL, 10);
+    return n->num.ival;
 }
 
 static void cg_num(codegen_t *cg, node_t *n)
 {
-    char tmp[64];
-    int len = n->num.val.len < 63 ? n->num.val.len : 63;
-    memcpy(tmp, n->num.val.str, len);
-    tmp[len] = '\0';
-    long val = strtol(tmp, NULL, 10);
-    fprintf(cg->out, "\tmovl\t$%ld, %%eax\n", val);
+    fprintf(cg->out, "\tmovl\t$%ld, %%eax\n", n->num.ival);
 }
 
 // Emit the binary arithmetic operation given left in %ecx and right in %eax.
@@ -1445,13 +1436,8 @@ static void cg_collect_cases(node_t *n, node_t **cases, int *ncases, node_t **de
 /* Evaluate a constant expression (integer literal only for now) */
 static int cg_const_expr_val(node_t *expr)
 {
-    if (expr->kind == ND_NUM) {
-        char buf[32];
-        int len = expr->num.val.len < 31 ? expr->num.val.len : 31;
-        memcpy(buf, expr->num.val.str, len);
-        buf[len] = '\0';
-        return atoi(buf);
-    }
+    if (expr->kind == ND_NUM)
+        return (int)expr->num.ival;
     if (expr->kind == ND_IDENT && expr->ident.sym && expr->ident.sym->is_enum_const)
         return expr->ident.sym->enum_val;
     if (expr->kind == ND_UNOP && expr->unop.op == '-') {

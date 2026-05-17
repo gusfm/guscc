@@ -89,17 +89,73 @@ static token_type_t get_token_type(char *s, int len)
     return TOKEN_IDENT;
 }
 
+static int hex_digit_val(int c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
+}
+
 static token_t *read_number(lex_t *l)
 {
     char *s = l->p - 1;
-    while (1) {
-        char c = lex_readc(l);
-        if (isdigit(c)) {
-            continue;
+    long val = 0;
+    int base = 10;
+    if (*s == '0') {
+        char c2 = lex_readc(l);
+        if (c2 == 'x' || c2 == 'X') {
+            base = 16;
+            while (1) {
+                char c = lex_readc(l);
+                int d = hex_digit_val(c);
+                if (d >= 0) {
+                    val = val * 16 + d;
+                    continue;
+                }
+                lex_ungetc(l);
+                break;
+            }
+        } else {
+            // Not a hex prefix: back up and fall through to decimal loop (treats 0123 as decimal)
+            lex_ungetc(l);
+            while (1) {
+                char c = lex_readc(l);
+                if (isdigit(c)) {
+                    val = val * 10 + (c - '0');
+                    continue;
+                }
+                lex_ungetc(l);
+                break;
+            }
         }
-        lex_ungetc(l);
-        return token_create(TOKEN_NUM, s, l->p, tok_line, tok_col);
+    } else {
+        val = *s - '0';
+        while (1) {
+            char c = lex_readc(l);
+            if (isdigit(c)) {
+                val = val * 10 + (c - '0');
+                continue;
+            }
+            lex_ungetc(l);
+            break;
+        }
     }
+    // Optional integer suffix run: any of u, U, l, L (up to 3 chars: e.g. "ull", "llu")
+    for (int i = 0; i < 3; i++) {
+        char sfx = lex_readc(l);
+        if (sfx == 'u' || sfx == 'U' || sfx == 'l' || sfx == 'L')
+            continue;
+        lex_ungetc(l);
+        break;
+    }
+    token_t *t = token_create(TOKEN_NUM, s, l->p, tok_line, tok_col);
+    t->ival = val;
+    (void)base;
+    return t;
 }
 
 static token_t *read_ident(lex_t *l)
@@ -128,6 +184,44 @@ static token_t *read_string(lex_t *l)
     }
 }
 
+static long decode_escape(char esc)
+{
+    switch (esc) {
+        case 'n': return '\n';
+        case 't': return '\t';
+        case 'r': return '\r';
+        case '\\': return '\\';
+        case '\'': return '\'';
+        case '"': return '"';
+        case '0': return '\0';
+        case 'a': return '\a';
+        case 'b': return '\b';
+        case 'f': return '\f';
+        case 'v': return '\v';
+        case '?': return '?';
+        default: return esc & 0xFF;
+    }
+}
+
+static token_t *read_char(lex_t *l)
+{
+    char *s = l->p - 1;
+    char c = lex_readc(l);
+    long val;
+    if (c == '\\') {
+        char esc = lex_readc(l);
+        val = decode_escape(esc);
+    } else {
+        val = c & 0xFF;
+    }
+    char close = lex_readc(l);
+    if (close != '\'')
+        fprintf(stderr, "%d:%d: error: unterminated character literal\n", tok_line, tok_col);
+    token_t *t = token_create(TOKEN_NUM, s, l->p, tok_line, tok_col);
+    t->ival = val;
+    return t;
+}
+
 static char lex_next_char(lex_t *l)
 {
     int c;
@@ -149,6 +243,8 @@ token_t *lex_next(lex_t *l)
     switch (c) {
         case '"':
             return read_string(l);
+        case '\'':
+            return read_char(l);
         case '(':
         case ')':
         case ',':

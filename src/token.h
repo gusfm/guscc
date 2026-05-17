@@ -60,6 +60,7 @@ typedef struct {
     token_type_t type; // Token type
     char *sval;        // String literal (not null terminated)
     int len;           // Token length
+    long ival;         // Integer value (for TOKEN_NUM: decimal/hex/char-literal value)
     int line;          // Token line
     int col;           // Token column
 } token_t;
