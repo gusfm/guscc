@@ -12,6 +12,8 @@ static void cg_member_addr(codegen_t *cg, node_t *n);
 static void cg_member(codegen_t *cg, node_t *n);
 static void cg_subscript_addr(codegen_t *cg, node_t *n);
 static void cg_subscript(codegen_t *cg, node_t *n);
+static int cg_decl_spec_base_size(node_t *ds);
+static int cg_subscript_elem_size(node_t *arr);
 static void cg_str(codegen_t *cg, node_t *n);
 static void cg_zero_array(codegen_t *cg, int base, int total);
 static void cg_array_init_str(codegen_t *cg, sym_t *sym, node_t *n);
@@ -749,9 +751,7 @@ static void cg_store_to_lvalue(codegen_t *cg, node_t *lhs)
             fprintf(cg->out, "\tmovl\t%%eax, (%%rcx)\n");
         }
     } else if (lhs->kind == ND_SUBSCRIPT) {
-        int elem_size = 4;
-        if (lhs->subscript.array->kind == ND_IDENT && lhs->subscript.array->ident.sym)
-            elem_size = sym_elem_size(lhs->subscript.array->ident.sym);
+        int elem_size = cg_subscript_elem_size(lhs->subscript.array);
         fprintf(cg->out, "\tpushq\t%%rax\n");
         cg_subscript_addr(cg, lhs); // address → %rax
         fprintf(cg->out, "\tmovq\t%%rax, %%rcx\n");
@@ -837,15 +837,51 @@ static void cg_member(codegen_t *cg, node_t *n)
 }
 
 // Compute address of array[index] into %rax
+/* Element size for `arr[i]` — i.e. sizeof(*arr) for pointer/array `arr`. */
+static int cg_subscript_elem_size(node_t *arr)
+{
+    if (arr->kind == ND_IDENT && arr->ident.sym)
+        return sym_elem_size(arr->ident.sym);
+    if (arr->kind == ND_MEMBER && arr->member.resolved) {
+        struct_member_t *m = arr->member.resolved;
+        // For `T *m`, indexing gives T (base type). For `T **m`, indexing gives T*.
+        if (m->pointer_level > 1)
+            return 8;
+        if (m->pointer_level == 1)
+            return cg_decl_spec_base_size(m->decl_spec);
+        return m->size; // T arr[N] member: element = T
+    }
+    if (arr->kind == ND_UNOP && arr->unop.op == '*') {
+        // (*p)[i]: each step is sizeof(*(*p)). If p has pointer_level >= 2, *p is at
+        // least a pointer, and (*p)[i] yields the next level down.
+        node_t *inner = arr->unop.operand;
+        if (inner->kind == ND_IDENT && inner->ident.sym) {
+            sym_t *s = inner->ident.sym;
+            if (s->pointer_level >= 3)
+                return 8; // (*p)[i] is still a pointer
+            if (s->pointer_level == 2)
+                return cg_decl_spec_base_size(s->decl_spec); // base T size
+        }
+    }
+    if (arr->kind == ND_SUBSCRIPT) {
+        // arr2[j][i]: recurse on the inner subscript. The inner yields a pointer-ish
+        // element; (*element)[i] uses one less pointer level.
+        int inner_size = cg_subscript_elem_size(arr->subscript.array);
+        // crude: if inner was 8 (pointer), assume one further deref yields a pointer too
+        // unless we can resolve the base type. For self-host this corner doesn't appear.
+        return inner_size == 8 ? 8 : inner_size;
+    }
+    // Falls back to int-sized step; fine for ND_NUM-style expressions but indicates
+    // a missing case for the caller to extend if it bites.
+    return 4;
+}
+
 static void cg_subscript_addr(codegen_t *cg, node_t *n)
 {
     node_t *arr = n->subscript.array;
     node_t *idx = n->subscript.index;
 
-    // Determine element size
-    int elem_size = 4;
-    if (arr->kind == ND_IDENT && arr->ident.sym)
-        elem_size = sym_elem_size(arr->ident.sym);
+    int elem_size = cg_subscript_elem_size(arr);
 
     // Step 1: compute scaled index → %rcx
     cg_expr(cg, idx);                                         // index → %eax
@@ -862,7 +898,8 @@ static void cg_subscript_addr(codegen_t *cg, node_t *n)
         else
             fprintf(cg->out, "\tleaq\t%d(%%rbp), %%rax\n", arr->ident.sym->offset);
     } else {
-        // Pointer: evaluate to get pointer value (may clobber %rcx, so save it first)
+        // Pointer expression (ND_MEMBER, pointer ident, etc.): evaluate to get pointer
+        // value (may clobber %rcx, so save it first).
         fprintf(cg->out, "\tpushq\t%%rcx\n");
         cg_expr(cg, arr);  // pointer value → %rax
         fprintf(cg->out, "\tpopq\t%%rcx\n");
@@ -875,9 +912,7 @@ static void cg_subscript_addr(codegen_t *cg, node_t *n)
 // Load value at array[index] into %rax/%eax
 static void cg_subscript(codegen_t *cg, node_t *n)
 {
-    int elem_size = 4;
-    if (n->subscript.array->kind == ND_IDENT && n->subscript.array->ident.sym)
-        elem_size = sym_elem_size(n->subscript.array->ident.sym);
+    int elem_size = cg_subscript_elem_size(n->subscript.array);
 
     cg_subscript_addr(cg, n); // address → %rax
     if (elem_size == 8)
@@ -1198,6 +1233,12 @@ static void cg_local_decl(codegen_t *cg, node_t *n)
 static void cg_call(codegen_t *cg, node_t *n)
 {
     int nargs = n->call.nargs;
+    int stack_args = nargs > 6 ? nargs - 6 : 0;
+    // Pad so (%rsp + 8) is 16-aligned at function entry. Each stack arg is 8 bytes;
+    // an odd number of stack args misaligns %rsp by 8.
+    int pad = (stack_args & 1) ? 8 : 0;
+    if (pad)
+        fprintf(cg->out, "\tsubq\t$8, %%rsp\n");
 
     // Evaluate arguments in reverse order and push onto stack
     for (int i = nargs - 1; i >= 0; i--) {
@@ -1221,6 +1262,10 @@ static void cg_call(codegen_t *cg, node_t *n)
         cg_expr(cg, func); // indirect call (function pointer)
         fprintf(cg->out, "\tcall\t*%%rax\n");
     }
+    // Clean up stack arguments and any padding so %rsp matches the caller's state.
+    int cleanup = stack_args * 8 + pad;
+    if (cleanup)
+        fprintf(cg->out, "\taddq\t$%d, %%rsp\n", cleanup);
     // Return value is in %rax/%eax
 }
 

@@ -39,3 +39,11 @@ if(VALGRIND)
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
 endif()
+
+# Three-stage bootstrap: stage-2 = guscc(src/*.c), stage-3 = stage-2(src/*.c),
+# then cmp the two binaries for bit-identical fixed-point.
+add_custom_target(selfhost
+    COMMAND ${PROJECT_SOURCE_DIR}/test/selfhost.sh ${CMAKE_BINARY_DIR}
+    DEPENDS guscc
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+)

@@ -2482,9 +2482,14 @@ static node_t *parser_function_definition(parser_t *p, node_t *decl_spec, node_t
     p->frame_offset = 0;
     p->scope = scope_new(NULL);
 
-    // Register parameters in the function scope
+    // Register parameters in the function scope. The first six integer params arrive
+    // in registers and get spilled to negative %rbp offsets by codegen's prologue.
+    // Params 7+ are pushed by the caller and live at positive %rbp offsets: the first
+    // stack arg sits at +16(%rbp) (8 bytes for the saved %rbp + 8 for the return addr),
+    // each subsequent at +24, +32, ...
     node_t *param_list = declarator->direct_decl.param_list;
     if (param_list != NULL) {
+        int stack_param_off = 16;
         for (int i = 0; i < param_list->param_list.nparams; i++) {
             node_t *pd = param_list->param_list.params[i];
             if (pd->param_decl.declarator == NULL ||
@@ -2506,11 +2511,18 @@ static node_t *parser_function_definition(parser_t *p, node_t *decl_spec, node_t
                 arr_sz = 0;
             }
             int size = parser_sym_size(pd->param_decl.decl_spec, ptr_lvl);
-            p->frame_offset = parser_align_down(p->frame_offset - size, size < 8 ? size : 8);
+            int offset;
+            if (i < 6) {
+                p->frame_offset = parser_align_down(p->frame_offset - size, size < 8 ? size : 8);
+                offset = p->frame_offset;
+            } else {
+                offset = stack_param_off;
+                stack_param_off += 8; // each stack arg is 8 bytes per System V ABI
+            }
             sym_t *param_sym =
                 scope_define(p->scope, pd->param_decl.declarator->direct_decl.ident.str,
                              pd->param_decl.declarator->direct_decl.ident.len,
-                             pd->param_decl.decl_spec, ptr_lvl, arr_sz, p->frame_offset);
+                             pd->param_decl.decl_spec, ptr_lvl, arr_sz, offset);
             if ((pd->param_decl.decl_spec->decl_spec.type_qualifier & TQ_CONST) && ptr_lvl == 0)
                 param_sym->is_const = 1;
             if (pd->param_decl.declarator->direct_decl.is_const_qualified && ptr_lvl > 0)
