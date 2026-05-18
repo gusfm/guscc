@@ -25,6 +25,69 @@ static const char *arg_regs32[6] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9
 static const char *arg_regs16[6] = {"%di", "%si", "%dx", "%cx", "%r8w", "%r9w"};
 static const char *arg_regs8[6] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b"};
 
+// Suffix for plain mov / arithmetic on a value of this size
+static const char *cg_size_suffix(int size)
+{
+    if (size == 8)
+        return "q";
+    if (size == 2)
+        return "w";
+    if (size == 1)
+        return "b";
+    return "l";
+}
+
+// Suffix for sign-extending load into %eax/%rax
+static const char *cg_load_suffix(int size)
+{
+    if (size == 8)
+        return "q";
+    if (size == 2)
+        return "swl";
+    if (size == 1)
+        return "sbl";
+    return "l";
+}
+
+// Accumulator register sized to hold a value of this size
+static const char *cg_ax_for_size(int size)
+{
+    if (size == 8)
+        return "%rax";
+    if (size == 2)
+        return "%ax";
+    if (size == 1)
+        return "%al";
+    return "%eax";
+}
+
+// Destination register for a sign-extending load: %rax for size 8, %eax otherwise
+static const char *cg_load_dst(int size) { return size == 8 ? "%rax" : "%eax"; }
+
+// Assembler directive for emitting an initializer of this size
+static const char *cg_data_directive(int size)
+{
+    if (size == 8)
+        return ".quad";
+    if (size == 2)
+        return ".short";
+    if (size == 1)
+        return ".byte";
+    return ".long";
+}
+
+// x86-64 argument register #i sized for a value of this size
+static const char *cg_arg_reg_for_size(int i, int size)
+{
+    if (size == 8)
+        return arg_regs64[i];
+    if (size == 2)
+        return arg_regs16[i];
+    if (size == 1)
+        return arg_regs8[i];
+    return arg_regs32[i];
+}
+
 // Return the assembly-visible name for a symbol (asm_label for static locals, name otherwise)
 static const char *sym_asm_name(sym_t *sym) { return sym->asm_label ? sym->asm_label : sym->name; }
 static int sym_asm_name_len(sym_t *sym)
@@ -449,14 +512,7 @@ static void cg_unop(codegen_t *cg, node_t *n)
             return;
         }
         cg_expr(cg, n->unop.operand); // pointer → %rax
-        if (elem == 8)
-            fprintf(cg->out, "\tmovq\t(%%rax), %%rax\n");
-        else if (elem == 2)
-            fprintf(cg->out, "\tmovswl\t(%%rax), %%eax\n");
-        else if (elem == 1)
-            fprintf(cg->out, "\tmovsbl\t(%%rax), %%eax\n");
-        else
-            fprintf(cg->out, "\tmovl\t(%%rax), %%eax\n");
+        fprintf(cg->out, "\tmov%s\t(%%rax), %s\n", cg_load_suffix(elem), cg_load_dst(elem));
         return;
     }
 
@@ -617,24 +673,12 @@ static void cg_load_sym(codegen_t *cg, sym_t *sym)
 {
     int size = sym_get_size(sym);
     if (sym->is_global) {
-        if (size == 8)
-            fprintf(cg->out, "\tmovq\t%.*s(%%rip), %%rax\n", sym_asm_name_len(sym), sym_asm_name(sym));
-        else if (size == 2)
-            fprintf(cg->out, "\tmovswl\t%.*s(%%rip), %%eax\n", sym_asm_name_len(sym), sym_asm_name(sym));
-        else if (size == 1)
-            fprintf(cg->out, "\tmovsbl\t%.*s(%%rip), %%eax\n", sym_asm_name_len(sym), sym_asm_name(sym));
-        else
-            fprintf(cg->out, "\tmovl\t%.*s(%%rip), %%eax\n", sym_asm_name_len(sym), sym_asm_name(sym));
+        fprintf(cg->out, "\tmov%s\t%.*s(%%rip), %s\n", cg_load_suffix(size),
+                sym_asm_name_len(sym), sym_asm_name(sym), cg_load_dst(size));
         return;
     }
-    if (size == 8)
-        fprintf(cg->out, "\tmovq\t%d(%%rbp), %%rax\n", sym->offset);
-    else if (size == 2)
-        fprintf(cg->out, "\tmovswl\t%d(%%rbp), %%eax\n", sym->offset);
-    else if (size == 1)
-        fprintf(cg->out, "\tmovsbl\t%d(%%rbp), %%eax\n", sym->offset);
-    else
-        fprintf(cg->out, "\tmovl\t%d(%%rbp), %%eax\n", sym->offset);
+    fprintf(cg->out, "\tmov%s\t%d(%%rbp), %s\n", cg_load_suffix(size), sym->offset,
+            cg_load_dst(size));
 }
 
 // Store %rax/%eax to a sym_t's stack slot (or global via %rip)
@@ -642,24 +686,12 @@ static void cg_store_sym(codegen_t *cg, sym_t *sym)
 {
     int size = sym_get_size(sym);
     if (sym->is_global) {
-        if (size == 8)
-            fprintf(cg->out, "\tmovq\t%%rax, %.*s(%%rip)\n", sym_asm_name_len(sym), sym_asm_name(sym));
-        else if (size == 2)
-            fprintf(cg->out, "\tmovw\t%%ax, %.*s(%%rip)\n", sym_asm_name_len(sym), sym_asm_name(sym));
-        else if (size == 1)
-            fprintf(cg->out, "\tmovb\t%%al, %.*s(%%rip)\n", sym_asm_name_len(sym), sym_asm_name(sym));
-        else
-            fprintf(cg->out, "\tmovl\t%%eax, %.*s(%%rip)\n", sym_asm_name_len(sym), sym_asm_name(sym));
+        fprintf(cg->out, "\tmov%s\t%s, %.*s(%%rip)\n", cg_size_suffix(size), cg_ax_for_size(size),
+                sym_asm_name_len(sym), sym_asm_name(sym));
         return;
     }
-    if (size == 8)
-        fprintf(cg->out, "\tmovq\t%%rax, %d(%%rbp)\n", sym->offset);
-    else if (size == 2)
-        fprintf(cg->out, "\tmovw\t%%ax, %d(%%rbp)\n", sym->offset);
-    else if (size == 1)
-        fprintf(cg->out, "\tmovb\t%%al, %d(%%rbp)\n", sym->offset);
-    else
-        fprintf(cg->out, "\tmovl\t%%eax, %d(%%rbp)\n", sym->offset);
+    fprintf(cg->out, "\tmov%s\t%s, %d(%%rbp)\n", cg_size_suffix(size), cg_ax_for_size(size),
+            sym->offset);
 }
 
 // Evaluate the address of an lvalue into %rax
@@ -704,14 +736,7 @@ static void cg_load_lvalue(codegen_t *cg, node_t *n)
     } else if (n->kind == ND_UNOP && n->unop.op == '*') {
         int elem = cg_expr_elem_size(n->unop.operand);
         cg_expr(cg, n->unop.operand); // pointer in %rax
-        if (elem == 8)
-            fprintf(cg->out, "\tmovq\t(%%rax), %%rax\n");
-        else if (elem == 2)
-            fprintf(cg->out, "\tmovswl\t(%%rax), %%eax\n");
-        else if (elem == 1)
-            fprintf(cg->out, "\tmovsbl\t(%%rax), %%eax\n");
-        else
-            fprintf(cg->out, "\tmovl\t(%%rax), %%eax\n");
+        fprintf(cg->out, "\tmov%s\t(%%rax), %s\n", cg_load_suffix(elem), cg_load_dst(elem));
     } else if (n->kind == ND_MEMBER) {
         cg_member(cg, n);
     } else if (n->kind == ND_SUBSCRIPT) {
@@ -739,14 +764,7 @@ static void cg_store_to_lvalue(codegen_t *cg, node_t *lhs)
         fprintf(cg->out, "\tpopq\t%%rax\n");
         if (lhs->member.resolved) {
             int size = lhs->member.resolved->size;
-            if (size == 8)
-                fprintf(cg->out, "\tmovq\t%%rax, (%%rcx)\n");
-            else if (size == 2)
-                fprintf(cg->out, "\tmovw\t%%ax, (%%rcx)\n");
-            else if (size == 1)
-                fprintf(cg->out, "\tmovb\t%%al, (%%rcx)\n");
-            else
-                fprintf(cg->out, "\tmovl\t%%eax, (%%rcx)\n");
+            fprintf(cg->out, "\tmov%s\t%s, (%%rcx)\n", cg_size_suffix(size), cg_ax_for_size(size));
         } else {
             fprintf(cg->out, "\tmovl\t%%eax, (%%rcx)\n");
         }
@@ -756,14 +774,8 @@ static void cg_store_to_lvalue(codegen_t *cg, node_t *lhs)
         cg_subscript_addr(cg, lhs); // address → %rax
         fprintf(cg->out, "\tmovq\t%%rax, %%rcx\n");
         fprintf(cg->out, "\tpopq\t%%rax\n");
-        if (elem_size == 8)
-            fprintf(cg->out, "\tmovq\t%%rax, (%%rcx)\n");
-        else if (elem_size == 2)
-            fprintf(cg->out, "\tmovw\t%%ax, (%%rcx)\n");
-        else if (elem_size == 1)
-            fprintf(cg->out, "\tmovb\t%%al, (%%rcx)\n");
-        else
-            fprintf(cg->out, "\tmovl\t%%eax, (%%rcx)\n");
+        fprintf(cg->out, "\tmov%s\t%s, (%%rcx)\n", cg_size_suffix(elem_size),
+                cg_ax_for_size(elem_size));
     } else if (lhs->kind == ND_UNOP && lhs->unop.op == '*') {
         // *ptr = value: evaluate pointer, store value at its address
         int elem = cg_expr_elem_size(lhs->unop.operand);
@@ -771,14 +783,7 @@ static void cg_store_to_lvalue(codegen_t *cg, node_t *lhs)
         cg_expr(cg, lhs->unop.operand); // pointer → %rax
         fprintf(cg->out, "\tmovq\t%%rax, %%rcx\n");
         fprintf(cg->out, "\tpopq\t%%rax\n");
-        if (elem == 8)
-            fprintf(cg->out, "\tmovq\t%%rax, (%%rcx)\n");
-        else if (elem == 2)
-            fprintf(cg->out, "\tmovw\t%%ax, (%%rcx)\n");
-        else if (elem == 1)
-            fprintf(cg->out, "\tmovb\t%%al, (%%rcx)\n");
-        else
-            fprintf(cg->out, "\tmovl\t%%eax, (%%rcx)\n");
+        fprintf(cg->out, "\tmov%s\t%s, (%%rcx)\n", cg_size_suffix(elem), cg_ax_for_size(elem));
     } else {
         // General lvalue: save value, compute address, restore, store
         fprintf(cg->out, "\tpushq\t%%rax\n");
@@ -826,14 +831,7 @@ static void cg_member(codegen_t *cg, node_t *n)
     if (n->member.resolved == NULL)
         return;
     int size = n->member.resolved->size;
-    if (size == 8)
-        fprintf(cg->out, "\tmovq\t(%%rax), %%rax\n");
-    else if (size == 2)
-        fprintf(cg->out, "\tmovswl\t(%%rax), %%eax\n");
-    else if (size == 1)
-        fprintf(cg->out, "\tmovsbl\t(%%rax), %%eax\n");
-    else
-        fprintf(cg->out, "\tmovl\t(%%rax), %%eax\n");
+    fprintf(cg->out, "\tmov%s\t(%%rax), %s\n", cg_load_suffix(size), cg_load_dst(size));
 }
 
 // Compute address of array[index] into %rax
@@ -915,14 +913,7 @@ static void cg_subscript(codegen_t *cg, node_t *n)
     int elem_size = cg_subscript_elem_size(n->subscript.array);
 
     cg_subscript_addr(cg, n); // address → %rax
-    if (elem_size == 8)
-        fprintf(cg->out, "\tmovq\t(%%rax), %%rax\n");
-    else if (elem_size == 2)
-        fprintf(cg->out, "\tmovswl\t(%%rax), %%eax\n");
-    else if (elem_size == 1)
-        fprintf(cg->out, "\tmovsbl\t(%%rax), %%eax\n");
-    else
-        fprintf(cg->out, "\tmovl\t(%%rax), %%eax\n");
+    fprintf(cg->out, "\tmov%s\t(%%rax), %s\n", cg_load_suffix(elem_size), cg_load_dst(elem_size));
 }
 
 // Map compound assignment operator to its base binary op token
@@ -1103,14 +1094,8 @@ static void cg_array_init_list(codegen_t *cg, sym_t *sym, node_t *n)
     for (int i = 0; i < count; i++) {
         cg_expr(cg, n->initializer_list.items[i]); // result in %rax / %eax
         int offset = base + i * elem_size;
-        if (elem_size == 8)
-            fprintf(cg->out, "\tmovq\t%%rax, %d(%%rbp)\n", offset);
-        else if (elem_size == 2)
-            fprintf(cg->out, "\tmovw\t%%ax, %d(%%rbp)\n", offset);
-        else if (elem_size == 1)
-            fprintf(cg->out, "\tmovb\t%%al, %d(%%rbp)\n", offset);
-        else
-            fprintf(cg->out, "\tmovl\t%%eax, %d(%%rbp)\n", offset);
+        fprintf(cg->out, "\tmov%s\t%s, %d(%%rbp)\n", cg_size_suffix(elem_size),
+                cg_ax_for_size(elem_size), offset);
     }
 }
 
@@ -1163,28 +1148,14 @@ static void cg_local_decl(codegen_t *cg, node_t *n)
                         continue;
                     }
                     long val = cg_node_int_val(elem);
-                    if (size == 8)
-                        fprintf(cg->out, "\t.quad\t%ld\n", val);
-                    else if (size == 2)
-                        fprintf(cg->out, "\t.short\t%ld\n", val);
-                    else if (size == 1)
-                        fprintf(cg->out, "\t.byte\t%ld\n", val);
-                    else
-                        fprintf(cg->out, "\t.long\t%ld\n", val);
+                    fprintf(cg->out, "\t%s\t%ld\n", cg_data_directive(size), val);
                 }
                 int remaining = (sym->array_size - count) * size;
                 if (remaining > 0)
                     fprintf(cg->out, "\t.zero\t%d\n", remaining);
             } else if (init->kind == ND_NUM) {
                 long val = cg_node_int_val(init);
-                if (size == 8)
-                    fprintf(cg->out, "\t.quad\t%ld\n", val);
-                else if (size == 2)
-                    fprintf(cg->out, "\t.short\t%ld\n", val);
-                else if (size == 1)
-                    fprintf(cg->out, "\t.byte\t%ld\n", val);
-                else
-                    fprintf(cg->out, "\t.long\t%ld\n", val);
+                fprintf(cg->out, "\t%s\t%ld\n", cg_data_directive(size), val);
             }
 
             fprintf(cg->out, "\t.text\n");
@@ -1359,24 +1330,9 @@ static void cg_postop(codegen_t *cg, node_t *n)
 
     cg_lvalue_addr(cg, operand);                  // %rax = address
     fprintf(cg->out, "\tmovq\t%%rax, %%rcx\n");   // %rcx = address (stable)
-    if (size == 8)
-        fprintf(cg->out, "\tmovq\t(%%rcx), %%rax\n");
-    else if (size == 2)
-        fprintf(cg->out, "\tmovswl\t(%%rcx), %%eax\n");
-    else if (size == 1)
-        fprintf(cg->out, "\tmovsbl\t(%%rcx), %%eax\n");
-    else
-        fprintf(cg->out, "\tmovl\t(%%rcx), %%eax\n");
-    const char *op_w;
-    if (size == 8)
-        op_w = (n->postop.op == TOKEN_INC_OP) ? "addq" : "subq";
-    else if (size == 2)
-        op_w = (n->postop.op == TOKEN_INC_OP) ? "addw" : "subw";
-    else if (size == 1)
-        op_w = (n->postop.op == TOKEN_INC_OP) ? "addb" : "subb";
-    else
-        op_w = (n->postop.op == TOKEN_INC_OP) ? "addl" : "subl";
-    fprintf(cg->out, "\t%s\t$%d, (%%rcx)\n", op_w, delta);
+    fprintf(cg->out, "\tmov%s\t(%%rcx), %s\n", cg_load_suffix(size), cg_load_dst(size));
+    const char *base = (n->postop.op == TOKEN_INC_OP) ? "add" : "sub";
+    fprintf(cg->out, "\t%s%s\t$%d, (%%rcx)\n", base, cg_size_suffix(size), delta);
 }
 
 static void cg_expr(codegen_t *cg, node_t *n)
@@ -1742,14 +1698,8 @@ static void cg_func(codegen_t *cg, node_t *n)
             if (sym == NULL)
                 continue;
             int size = sym_get_size(sym);
-            if (size == 8)
-                fprintf(cg->out, "\tmovq\t%s, %d(%%rbp)\n", arg_regs64[i], sym->offset);
-            else if (size == 2)
-                fprintf(cg->out, "\tmovw\t%s, %d(%%rbp)\n", arg_regs16[i], sym->offset);
-            else if (size == 1)
-                fprintf(cg->out, "\tmovb\t%s, %d(%%rbp)\n", arg_regs8[i], sym->offset);
-            else
-                fprintf(cg->out, "\tmovl\t%s, %d(%%rbp)\n", arg_regs32[i], sym->offset);
+            fprintf(cg->out, "\tmov%s\t%s, %d(%%rbp)\n", cg_size_suffix(size),
+                    cg_arg_reg_for_size(i, size), sym->offset);
         }
     }
 
@@ -1836,14 +1786,7 @@ static void cg_global_decl(codegen_t *cg, node_t *n)
             node_t *elem = init->initializer_list.items[i];
             if (elem->kind == ND_NUM) {
                 long val = cg_node_int_val(elem);
-                if (size == 8)
-                    fprintf(cg->out, "\t.quad\t%ld\n", val);
-                else if (size == 2)
-                    fprintf(cg->out, "\t.short\t%ld\n", val);
-                else if (size == 1)
-                    fprintf(cg->out, "\t.byte\t%ld\n", val);
-                else
-                    fprintf(cg->out, "\t.long\t%ld\n", val);
+                fprintf(cg->out, "\t%s\t%ld\n", cg_data_directive(size), val);
             } else if (elem->kind == ND_STR && size == 8) {
                 fprintf(cg->out, "\t.quad\t.LC%d\n", str_ids[i]);
             } else {
@@ -1870,14 +1813,7 @@ static void cg_global_decl(codegen_t *cg, node_t *n)
     } else if (init->kind == ND_NUM) {
         // Scalar integer: e.g. int x = 42
         long val = cg_node_int_val(init);
-        if (size == 8)
-            fprintf(cg->out, "\t.quad\t%ld\n", val);
-        else if (size == 2)
-            fprintf(cg->out, "\t.short\t%ld\n", val);
-        else if (size == 1)
-            fprintf(cg->out, "\t.byte\t%ld\n", val);
-        else
-            fprintf(cg->out, "\t.long\t%ld\n", val);
+        fprintf(cg->out, "\t%s\t%ld\n", cg_data_directive(size), val);
     } else if (init->kind == ND_STR && sym->pointer_level > 0) {
         // Pointer to string literal: e.g. char *p = "hello"
         int id = cg->str_count++;
