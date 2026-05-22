@@ -18,6 +18,11 @@ typedef struct {
     int switch_ncases;              // number of cases in current switch
     int switch_default_lbl;         // label number for default, -1 if none
     int str_count;                  // counter for .LC string literal labels
+    char **str_pool_text;           // deduped string literals: source spelling (incl. quotes)
+    int *str_pool_len;              // parallel: spelling length
+    int *str_pool_label;            // parallel: assigned .LC label
+    int str_pool_count;
+    int str_pool_cap;
 } codegen_t;
 
 void codegen_init(codegen_t *cg, FILE *out);

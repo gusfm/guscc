@@ -250,10 +250,18 @@ void codegen_init(codegen_t *cg, FILE *out)
     cg->switch_ncases = 0;
     cg->switch_default_lbl = -1;
     cg->str_count = 0;
+    cg->str_pool_text = NULL;
+    cg->str_pool_len = NULL;
+    cg->str_pool_label = NULL;
+    cg->str_pool_count = 0;
+    cg->str_pool_cap = 0;
 }
 
 void codegen_finish(codegen_t *cg)
 {
+    free(cg->str_pool_text);
+    free(cg->str_pool_len);
+    free(cg->str_pool_label);
     cg->out = NULL;
 }
 
@@ -1014,14 +1022,44 @@ static void cg_assign(codegen_t *cg, node_t *n)
     }
 }
 
+// Look up a previously emitted string literal by source spelling.
+// Returns its .LC label, or -1 if not yet emitted.
+static int cg_str_pool_find(codegen_t *cg, char *text, int len)
+{
+    for (int i = 0; i < cg->str_pool_count; i++) {
+        if (cg->str_pool_len[i] == len &&
+            strncmp(cg->str_pool_text[i], text, (size_t)len) == 0)
+            return cg->str_pool_label[i];
+    }
+    return -1;
+}
+
+static void cg_str_pool_add(codegen_t *cg, char *text, int len, int label)
+{
+    if (cg->str_pool_count >= cg->str_pool_cap) {
+        cg->str_pool_cap = cg->str_pool_cap == 0 ? 16 : cg->str_pool_cap * 2;
+        cg->str_pool_text = realloc(cg->str_pool_text, sizeof(char *) * (size_t)cg->str_pool_cap);
+        cg->str_pool_len = realloc(cg->str_pool_len, sizeof(int) * (size_t)cg->str_pool_cap);
+        cg->str_pool_label = realloc(cg->str_pool_label, sizeof(int) * (size_t)cg->str_pool_cap);
+    }
+    cg->str_pool_text[cg->str_pool_count] = text;
+    cg->str_pool_len[cg->str_pool_count] = len;
+    cg->str_pool_label[cg->str_pool_count] = label;
+    cg->str_pool_count++;
+}
+
 static void cg_str(codegen_t *cg, node_t *n)
 {
-    int id = cg->str_count++;
-    fprintf(cg->out, "\t.pushsection\t.rodata\n");
-    fprintf(cg->out, ".LC%d:\n", id);
     // n->str.val.str points to opening '"'; n->str.val.len includes both quotes
-    fprintf(cg->out, "\t.string\t%.*s\n", n->str.val.len, n->str.val.str);
-    fprintf(cg->out, "\t.popsection\n");
+    int id = cg_str_pool_find(cg, n->str.val.str, n->str.val.len);
+    if (id < 0) {
+        id = cg->str_count++;
+        fprintf(cg->out, "\t.pushsection\t.rodata\n");
+        fprintf(cg->out, ".LC%d:\n", id);
+        fprintf(cg->out, "\t.string\t%.*s\n", n->str.val.len, n->str.val.str);
+        fprintf(cg->out, "\t.popsection\n");
+        cg_str_pool_add(cg, n->str.val.str, n->str.val.len, id);
+    }
     fprintf(cg->out, "\tleaq\t.LC%d(%%rip), %%rax\n", id);
 }
 
