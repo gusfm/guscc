@@ -227,6 +227,28 @@ static token_t *read_char(lex_t *l)
     return t;
 }
 
+// Consume a cpp line marker (`# N "file" flags`) or passthrough directive
+// such as #pragma, starting just after the leading '#'. For a line marker,
+// set l->line so the next physical line is numbered N — mapping diagnostics
+// back to original source positions.
+static void lex_line_directive(lex_t *l)
+{
+    char c = lex_readc(l);
+    while (c == ' ' || c == '\t')
+        c = lex_readc(l);
+    long n = 0;
+    int have_num = 0;
+    while (c >= '0' && c <= '9') {
+        n = n * 10 + (c - '0');
+        have_num = 1;
+        c = lex_readc(l);
+    }
+    while (c != '\n' && c != EOF)
+        c = lex_readc(l);
+    if (have_num)
+        l->line = (int)n;
+}
+
 static char lex_next_char(lex_t *l)
 {
     int c;
@@ -250,6 +272,13 @@ token_t *lex_next(lex_t *l)
             return read_string(l);
         case '\'':
             return read_char(l);
+        case '#':
+            // cpp line marker / passthrough directive (only at line start)
+            if (tok_col == 1) {
+                lex_line_directive(l);
+                return lex_next(l);
+            }
+            return read_ident(l);
         case '(':
         case ')':
         case ',':

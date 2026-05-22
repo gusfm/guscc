@@ -57,7 +57,9 @@ static char *load_file_to_string(const char *filename, long *size)
 static char *preprocess_file(const char *filename, long *size)
 {
     char cmd[512];
-    snprintf(cmd, sizeof(cmd), "cc -E -P -D__GUSCC__ %s", filename);
+    // No -P: keep cpp line markers (`# N "file"`) so the lexer can map
+    // diagnostics back to original source line numbers.
+    snprintf(cmd, sizeof(cmd), "cc -E -D__GUSCC__ %s", filename);
     FILE *pp = popen(cmd, "r");
     if (!pp) {
         perror("popen");
