@@ -244,8 +244,7 @@ static char lex_next_char(lex_t *l)
 token_t *lex_next(lex_t *l)
 {
     int c = lex_next_char(l);
-    char c2;
-    char c3;
+    char c2, c3;
     switch (c) {
         case '"':
             return read_string(l);

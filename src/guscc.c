@@ -131,8 +131,7 @@ static int codegen(node_t *ast, const char *outpath)
 
 static void debug_file(char *buf)
 {
-    char *ptr = buf;
-    char *endline;
+    char *endline, *ptr = buf;
     int line = 1;
     while ((endline = strchr(ptr, '\n')) != NULL) {
         printf("%d: ", line);
