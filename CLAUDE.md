@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`guscc` is a recursive-descent C compiler written in C99, targeting x86-64 Linux assembly (System V ABI). The goal is eventual self-hosting.
+`guscc` is a recursive-descent C compiler written in C99, targeting x86-64 Linux assembly (System V ABI). It is self-hosting: it compiles its own `src/*.c` into a working compiler binary, verified by a bit-identical three-stage bootstrap (`cmake --build build --target selfhost`).
 
 ## Commands
 
@@ -15,6 +15,9 @@ cmake --build build
 
 # Run tests with valgrind (must run from project root)
 cmake --build build && cmake --build build --target valgrind
+
+# Three-stage self-hosting bootstrap (builds stage-2 and stage-3, cmp -s for fixed point)
+cmake --build build --target selfhost
 
 # Compile to binary (output is a.out in the current directory)
 ./build/guscc test/files/return_literal.c
@@ -45,29 +48,35 @@ Code style is enforced by `.clang-format` (LLVM base, 100-column limit).
 | `src/token.{h,c}` | Token type enum and helpers |
 | `src/lex.{h,c}` | Lexer — emits tokens one at a time via `lex_next()` |
 | `src/ast.{h,c}` | `node_t` tagged union; debug printer |
-| `src/sym.{h,c}` | Symbol table (`sym_t`/`scope_t`) and struct type registry (`struct_def_t`/`struct_member_t`) — built during parsing |
+| `src/sym.{h,c}` | Symbol table (`sym_t`/`scope_t`) plus struct/union, enum, and typedef registries (`struct_def_t`/`struct_member_t`, `enum_def_t`, `typedef_def_t`) — built during parsing |
 | `src/parser.{h,c}` | Recursive-descent parser with two-token lookahead; builds AST and symbol table inline |
 | `src/codegen.{h,c}` | AST walker that emits x86-64 System V ABI assembly |
 | `src/guscc.c` | Entry point — orchestrates the pipeline |
 
 ### Symbol table & stack frame
 
-Parameters are assigned negative `%rbp` offsets in declaration order (first param closest to `%rbp`), followed by locals. Frame size is rounded to a multiple of 16. In the function prologue, integer parameters are spilled from `%rdi/%rsi/%rdx/%rcx/%r8/%r9` to their stack slots. Scope chains use parent pointers.
+The first six integer parameters are assigned negative `%rbp` offsets in declaration order (first param closest to `%rbp`), followed by locals. Frame size is rounded to a multiple of 16. In the function prologue, those parameters are spilled from `%rdi/%rsi/%rdx/%rcx/%r8/%r9` to their stack slots; the seventh and later parameters are pushed by the caller and read from positive `%rbp` offsets. Scope chains use parent pointers.
+
+### Self-hosting
+
+When `guscc` compiles its own source, `cc -E` runs with `-D__GUSCC__`, so `src/guscc_libc.h` exposes hand-written libc prototypes (a `size_t`, opaque `FILE`, and ~25 functions) instead of the extension-laden system headers. The `selfhost` target (`test/selfhost.sh`) builds stage-2 with stage-1 and stage-3 with stage-2, then `cmp -s` confirms the two are byte-identical. Codegen must stay deterministic — no addresses, timestamps, or hash-ordered output in the emitted `.s` — or the fixed point breaks.
 
 ### Limits
 
-- Max 64 functions/statements per translation unit, 8 parameters/arguments
-- Only up to 6 integer parameters (System V AMD64 ABI register arguments)
+- No fixed cap on functions, statements, parameters, or call arguments — these use dynamic vectors (`ast.h`/`ast.c`, grown via `node_vec_push`). Remaining hard caps: initializer lists max 64 elements, `switch` max 64 cases.
+- Integer parameters/arguments only (no floating-point); the first six use registers (`%rdi/%rsi/%rdx/%rcx/%r8/%r9`), extras are passed on the stack
 - 1D fixed-size local arrays supported with braced initializers (`int a[5] = {1,2,3}`) and string literal initializers (`char s[20] = "hello"`); no multi-dimensional arrays or `sizeof(int[N])` (array in type-name context)
 - Pointer arithmetic supported for pointer variables and function parameters: `+`, `-`, `+=`, `-=`, `++`, `--` (prefix and postfix), pointer comparisons, and pointer subtraction yielding element count (ptrdiff); offsets scaled by `sizeof(*p)` automatically; dereference (`*p`) respects pointee size; dereferencing a non-pointer is a compile-time error
-- Preprocessor supported via external `cc -E -P`: `#include`, `#define`, `#ifdef`/`#ifndef`/`#endif`, and all standard C preprocessor directives work; preprocessing is on by default; use `-no-pp` to skip; error locations refer to preprocessed line numbers, not original source
+- Preprocessor supported via external `cc -E`: `#include`, `#define`, `#ifdef`/`#ifndef`/`#endif`, and all standard C preprocessor directives work; preprocessing is on by default; use `-no-pp` to skip. cpp line markers (`# N "file"`) are kept and consumed by the lexer (`lex_line_directive`), so diagnostics report original source line numbers mapped back through `#include`s
 - `sizeof` operator supported: `sizeof(type_name)` for all types (primitives, structs, enums, pointers, typedef names); `sizeof expr` for identifiers, arrays, dereferences (`sizeof *p`), member access (`sizeof s.x`), subscripts (`sizeof a[0]`), string literals, numeric literals, and cast expressions; all sizeof results are compile-time constants; no `sizeof(int[N])` (array in type-name context)
 - Enums supported: named and anonymous definitions, explicit and auto-incrementing values; enumerator constants are visible in the enclosing scope; `enum` type is equivalent to `int` (4 bytes); enumerator initializers must be integer literals (no complex constant expressions)
-- Named struct and union definitions supported; nested struct/union member access and struct/union assignment supported; no anonymous structs/unions
+- Named struct and union definitions supported; nested member access and struct/union assignment supported; anonymous struct/union members (declared with no declarator, fields promoted into the enclosing type — as `node_t` itself uses) and forward struct declarations (`typedef struct foo foo_t;`) are supported; no standalone anonymous struct/union types
 - Forward function calls (callee defined later) produce an "undeclared identifier" warning; forward declarations with unnamed parameters are supported
 - Variadic functions (`...`) supported in declarations and definitions; ellipsis must follow at least one named parameter per the C grammar (`parameter_list ',' ELLIPSIS`); `va_list`/`va_start`/`va_arg` are not built-in; all calls emit `xorl %eax, %eax` (zero SSE args) for System V ABI compliance
 - Parenthesized abstract declarators (function pointer syntax) are parsed but not code-generated
 - `short` (2 bytes) and `long` (8 bytes) type specifiers supported; combined forms accepted: `short int`, `long int`, `long long`, `long long int`; both `long` and `long long` are 8 bytes on x86-64; arithmetic on `short`/`long` values uses 32-bit operations (values >2³¹ will truncate), but load/store correctly use the proper width (16-bit `movw`/`movswl` for `short`, 64-bit `movq` for `long`)
+- `unsigned`/`signed` accepted as type specifiers (e.g. `unsigned long`, the `<stddef.h>` `size_t` form) but parsed-and-discarded — all arithmetic stays signed; no unsigned-wrap or unsigned-shift semantics
+- Lexer handles char literals with standard escapes (`'\n'`, `'\0'`, …), hex literals (`0xFF`), and integer suffixes (`200809L`, `1ULL`); the decoded value lives in `token_t.ival` / `node.num.ival`
 - `switch`/`case`/`default` supported with fall-through semantics and `break`; case values must be integer literals (or negated integer literals); no computed gotos or range expressions
 - `static` storage class specifier supported: file-scope `static` gives internal linkage (omits `.globl`); block-scope `static` gives static storage duration (allocated in `.data`/`.bss` with unique label, accessed via `%rip`-relative); static local initializers must be constant expressions; no `auto`/`register` yet
 - `extern` storage class specifier supported: file-scope `extern` declares external linkage without allocating storage (linker resolves); block-scope `extern` declares a variable with external linkage visible in the block; `extern` on function declarations/definitions is accepted (no-op since functions default to external linkage); `extern` with initializer is rejected
