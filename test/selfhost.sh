@@ -20,13 +20,6 @@ if [[ ! -x "$BUILD_DIR/guscc" ]]; then
     exit 1
 fi
 
-# crt files / dynamic linker — same set that guscc.c invokes for normal links.
-DYN_LINKER="/lib64/ld-linux-x86-64.so.2"
-LIBC_DIR="/usr/lib/x86_64-linux-gnu"
-CRT1="$LIBC_DIR/crt1.o"
-CRTI="$LIBC_DIR/crti.o"
-CRTN="$LIBC_DIR/crtn.o"
-
 # build_stage <compiler> <out-binary>
 #   compiles every src/*.c with <compiler>, assembles, links into <out-binary>.
 build_stage() {
@@ -47,13 +40,9 @@ build_stage() {
         ofiles+=("$of")
     done
 
-    ld -o "$outbin" \
-       -dynamic-linker "$DYN_LINKER" \
-       "$CRT1" "$CRTI" \
-       "${ofiles[@]}" \
-       -lc \
-       "$CRTN" \
-       -L"$LIBC_DIR"
+    # Link through cc, same as guscc.c does, so crt paths and the dynamic
+    # linker come from the host toolchain instead of a hardcoded distro layout.
+    cc -no-pie -o "$outbin" "${ofiles[@]}"
 }
 
 echo "[selfhost] stage-2: building with $BUILD_DIR/guscc"

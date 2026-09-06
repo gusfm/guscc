@@ -272,16 +272,11 @@ int guscc(int argc, char **argv)
     }
 
     const char *binary = outname ? outname : "a.out";
-    snprintf(cmd, sizeof(cmd),
-             "ld -o %s "
-             "-dynamic-linker /lib64/ld-linux-x86-64.so.2 "
-             "/usr/lib/x86_64-linux-gnu/crt1.o "
-             "/usr/lib/x86_64-linux-gnu/crti.o "
-             "%s "
-             "-lc "
-             "/usr/lib/x86_64-linux-gnu/crtn.o "
-             "-L/usr/lib/x86_64-linux-gnu",
-             binary, objfile);
+    /* Link through cc rather than ld directly: it knows where this distro keeps
+     * crt1.o/crti.o/crtn.o and the dynamic linker, which differ between
+     * multiarch (Debian) and flat /usr/lib (Arch) layouts. -no-pie keeps the
+     * non-PIE output the emitted code assumes. */
+    snprintf(cmd, sizeof(cmd), "cc -no-pie -o %s %s", binary, objfile);
     ret = system(cmd);
     unlink(objfile);
     if (ret != 0) {
